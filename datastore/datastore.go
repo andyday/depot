@@ -7,9 +7,6 @@ import (
 
 	"cloud.google.com/go/datastore"
 	"github.com/andyday/depot"
-	"github.com/andyday/depot/internal"
-	"github.com/andyday/depot/transform"
-	"github.com/andyday/depot/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -24,10 +21,6 @@ func NewDatabase(ctx context.Context, projectID, databaseID string) (c *DB, err 
 	c = &DB{}
 	c.datastore, err = datastore.NewClientWithDatabase(ctx, projectID, databaseID)
 	return
-}
-
-func (d *DB) Table(name string) *depot.Table {
-	return depot.NewTable(d, name)
 }
 
 func (d *DB) Put(ctx context.Context, table string, entity interface{}) (err error) {
@@ -47,7 +40,7 @@ func (d *DB) Get(ctx context.Context, table string, entity interface{}) (err err
 		return
 	}
 	if err = d.datastore.Get(ctx, &k, e); errors.Is(err, datastore.ErrNoSuchEntity) {
-		return types.ErrEntityNotFound
+		return depot.ErrEntityNotFound
 	}
 	return
 }
@@ -68,55 +61,49 @@ func (d *DB) Create(ctx context.Context, table string, entity interface{}) (err 
 		return
 	}
 	if _, err = d.datastore.Mutate(ctx, datastore.NewInsert(&k, e)); status.Code(err) == codes.AlreadyExists {
-		return types.ErrEntityAlreadyExists
+		return depot.ErrEntityAlreadyExists
 	}
 	return
 }
 
-func (d *DB) Update(ctx context.Context, table string, entity interface{}) (err error) {
+func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ...depot.UpdateOp) (err error) {
 	var (
-		updates map[string]interface{}
-		v       interface{}
+		updates []depot.Update
+		u       depot.Update
+		prop    depot.Property
+		propMap = make(datastoreMap)
 		ok      bool
-		tf      *transform.Transform
 	)
 	e := &datastoreEntity{kind: table, entity: entity}
 	k := datastore.Key{}
 	if err = e.LoadKey(&k); err != nil {
 		return
 	}
-	if updates, err = internal.EntityUpdates(entity); err != nil {
+	if updates, err = depot.EntityUpdates(entity, op); err != nil {
 		return
 	}
 	_, err = d.datastore.RunInTransaction(ctx, func(tx *datastore.Transaction) (err error) {
-		var props []datastore.Property
-		if err = d.datastore.Get(ctx, &k, e); errors.Is(err, datastore.ErrNoSuchEntity) {
-			return types.ErrEntityNotFound
+		if err = d.datastore.Get(ctx, &k, propMap); errors.Is(err, datastore.ErrNoSuchEntity) {
+			return depot.ErrEntityNotFound
 		} else if err != nil {
 			return
 		}
-		if props, err = e.Save(); err != nil {
-			return
-		}
-		for i, prop := range props {
-			if v, ok = updates[prop.Name]; !ok {
-				continue
+		for _, u = range updates {
+			if prop, ok = propMap[u.Name]; !ok {
+				prop = depot.Property{Name: u.Name}
 			}
-			if tf, ok = v.(*transform.Transform); ok {
-				switch tf.Type {
-				case transform.TypeAdd:
-					prop.Value = internal.AddValues(prop.Value, tf.Value)
-				case transform.TypeSubtract:
-					prop.Value = internal.SubtractValues(prop.Value, tf.Value)
-				default:
-					continue
-				}
-			} else {
-				prop.Value = v
+			switch u.Op.(type) {
+			case *depot.AddUpdateOp:
+				prop.Value = depot.AddValues(prop.Value, u.Value)
+			case *depot.SubtractUpdateOp:
+				prop.Value = depot.SubtractValues(prop.Value, u.Value)
+			default:
+				prop.Value = u.Value
 			}
-			props[i] = prop
+			propMap[u.Name] = prop
 		}
-		if err = e.Load(props); err != nil {
+
+		if err = depot.EntityFromPropertyMap(propMap, entity); err != nil {
 			return
 		}
 		_, err = d.datastore.Put(ctx, &k, e)
@@ -125,14 +112,19 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}) (err 
 	return
 }
 
+func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, entities interface{}, op ...depot.QueryOp) (string, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 type datastoreEntity struct {
 	kind   string
 	entity interface{}
 }
 
 func (d *datastoreEntity) LoadKey(k *datastore.Key) (err error) {
-	var key internal.Key
-	if key, err = internal.EntityKey(d.entity); err != nil {
+	var key depot.Key
+	if key, err = depot.EntityKey(d.entity); err != nil {
 		return
 	}
 	k.Kind = d.kind
@@ -145,18 +137,31 @@ func (d *datastoreEntity) LoadKey(k *datastore.Key) (err error) {
 }
 
 func (d *datastoreEntity) Load(properties []datastore.Property) (err error) {
-	return internal.EntityFromProperties(fromDatastoreProps(properties), d.entity)
+	return depot.EntityFromProperties(fromDatastoreProps(properties), d.entity)
 }
 
 func (d *datastoreEntity) Save() (datastoreProps []datastore.Property, err error) {
-	var props []internal.Property
-	if props, err = internal.EntityProperties(d.entity); err != nil {
+	var props []depot.Property
+	if props, err = depot.EntityProperties(d.entity); err != nil {
 		return
 	}
 	return toDatastoreProps(props), nil
 }
 
-func toDatastoreProps(in []internal.Property) (out []datastore.Property) {
+type datastoreMap map[string]depot.Property
+
+func (d datastoreMap) Load(properties []datastore.Property) (err error) {
+	for _, prop := range properties {
+		d[prop.Name] = depot.Property{Name: prop.Name, Value: prop.Value}
+	}
+	return
+}
+
+func (d datastoreMap) Save() (datastoreProps []datastore.Property, err error) {
+	panic("not implemented")
+}
+
+func toDatastoreProps(in []depot.Property) (out []datastore.Property) {
 	for _, prop := range in {
 		out = append(out, datastore.Property{
 			Name:    prop.Name,
@@ -167,9 +172,9 @@ func toDatastoreProps(in []internal.Property) (out []datastore.Property) {
 	return
 }
 
-func fromDatastoreProps(in []datastore.Property) (out []internal.Property) {
+func fromDatastoreProps(in []datastore.Property) (out []depot.Property) {
 	for _, prop := range in {
-		out = append(out, internal.Property{
+		out = append(out, depot.Property{
 			Name:  prop.Name,
 			Value: prop.Value,
 		})

@@ -41,3 +41,11 @@ func (s *DynamoSuite) TestCreate() {
 func (s *DynamoSuite) TestUpdate() {
 	TestUpdate(&s.Suite)
 }
+
+func (s *DynamoSuite) TestQueryCreatedIndex() {
+	TestQueryCreatedIndex(&s.Suite)
+}
+
+func (s *DynamoSuite) TestQueryNamedIndex() {
+	TestQueryNamedIndex(&s.Suite)
+}

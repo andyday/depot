@@ -1,4 +1,4 @@
-package types
+package depot
 
 import "errors"
 

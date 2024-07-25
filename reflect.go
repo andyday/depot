@@ -1,10 +1,8 @@
-package internal
+package depot
 
 import (
 	"reflect"
 	"strings"
-
-	"github.com/andyday/depot/types"
 )
 
 type KeyPart struct {
@@ -67,6 +65,14 @@ func EntityProperties(entity interface{}) (props []Property, err error) {
 }
 
 func EntityFromProperties(props []Property, entity interface{}) (err error) {
+	propMap := make(map[string]Property)
+	for _, prop := range props {
+		propMap[prop.Name] = prop
+	}
+	return EntityFromPropertyMap(propMap, entity)
+}
+
+func EntityFromPropertyMap(props map[string]Property, entity interface{}) (err error) {
 	var (
 		s Struct
 		v = reflect.ValueOf(entity)
@@ -74,27 +80,29 @@ func EntityFromProperties(props []Property, entity interface{}) (err error) {
 	if s, v, err = GetStruct(v); err != nil {
 		return
 	}
-	propMap := make(map[string]Property)
-	for _, prop := range props {
-		propMap[prop.Name] = prop
-	}
 	ln := len(s)
 	for i := 0; i < ln; i++ {
 		f := s[i]
-		if p, ok := propMap[f.Name]; ok {
+		fld := v.Field(i)
+		if p, ok := props[f.Name]; ok {
 			pv := reflect.ValueOf(p.Value)
-			v.Field(i).Set(pv)
+			fld.Set(pv)
 		}
 	}
 	return
 }
 
-func EntityUpdates(entity interface{}) (updates map[string]interface{}, err error) {
+type Update struct {
+	Name  string
+	Value interface{}
+	Op    UpdateOp
+}
+
+func EntityUpdates(entity interface{}, ops []UpdateOp) (updates []Update, err error) {
 	var (
 		s Struct
 		v = reflect.ValueOf(entity)
 	)
-	updates = make(map[string]interface{})
 	if s, v, err = GetStruct(v); err != nil {
 		return
 	}
@@ -108,9 +116,100 @@ func EntityUpdates(entity interface{}) (updates map[string]interface{}, err erro
 			fv.IsZero() {
 			continue
 		}
-		updates[f.Name] = fv.Interface()
+		updates = append(updates, Update{
+			Name:  f.Name,
+			Value: fv.Interface(),
+			Op:    GetUpdateOp(ops, f.Name),
+		})
 	}
 	return
+}
+
+type KeyType uint8
+
+const (
+	KeyTypeNone KeyType = iota
+	KeyTypePartition
+	KeyTypeSort
+)
+
+type Condition struct {
+	Name    string
+	Value   interface{}
+	KeyType KeyType
+	Op      QueryCondition
+}
+
+func EntityConditions(kind string, entity interface{}, ops []QueryOp) (conditions []Condition, err error) {
+	var (
+		s  Struct
+		v  = reflect.ValueOf(entity)
+		kt KeyType
+	)
+	if s, v, err = GetStruct(v); err != nil {
+		return
+	}
+	ln := len(s)
+	for i := 0; i < ln; i++ {
+		f := s[i]
+		fv := v.Field(i)
+		op := GetQueryCondition(ops, f.Name)
+		value := fv.Interface()
+
+		if fv.IsZero() {
+			value = nil
+			if !(op != nil && op.Valueless()) {
+				continue
+			}
+		}
+		mode := GetMode(kind, f)
+		switch mode {
+		case FieldModeExclude:
+			continue
+		case FieldModePartition:
+			kt = KeyTypePartition
+		case FieldModeSort:
+			kt = KeyTypeSort
+		default:
+			kt = KeyTypeNone
+		}
+		conditions = append(conditions, Condition{
+			Name:    f.Name,
+			Value:   value,
+			KeyType: kt,
+			Op:      GetQueryCondition(ops, f.Name),
+		})
+	}
+	return
+}
+
+func GetMode(kind string, f Field) FieldMode {
+	if kind != "" {
+		for _, index := range f.Indexes {
+			if index.Name == kind {
+				return index.Mode
+			}
+		}
+	}
+	return f.Mode
+}
+
+func GetUpdateOp(ops []UpdateOp, field string) UpdateOp {
+	for _, op := range ops {
+		if op.Field() == field {
+			return op
+		}
+	}
+	return nil
+}
+
+func GetQueryCondition(ops []QueryOp, field string) QueryCondition {
+	for _, op := range ops {
+		if qc, ok := op.(QueryCondition); ok && qc.Field() == field {
+			return qc
+		}
+	}
+	return nil
 }
 
 type FieldMode int8
@@ -124,6 +223,12 @@ const (
 )
 
 type Field struct {
+	Name    string
+	Mode    FieldMode
+	Indexes []Index
+}
+
+type Index struct {
 	Name string
 	Mode FieldMode
 }
@@ -142,7 +247,7 @@ func GetStruct(v reflect.Value) (s Struct, sv reflect.Value, err error) {
 		sv = sv.Elem()
 	}
 	if sv.Kind() != reflect.Struct {
-		err = types.ErrEntityNotFound
+		err = ErrEntityNotFound
 		return
 	}
 
@@ -182,6 +287,22 @@ func field(typ reflect.Type, i int) (fld Field) {
 				fld.Mode = FieldModeSort
 			case "omitempty":
 				fld.Mode = FieldModeOmitEmpty
+			default:
+				if strings.HasPrefix(p, "index:") {
+					indexParts := strings.Split(p, ":")
+					if len(indexParts) != 3 {
+						panic("invalid index tag " + p)
+					}
+					switch indexParts[2] {
+					case "pk":
+						fld.Indexes = append(fld.Indexes, Index{Name: indexParts[1], Mode: FieldModePartition})
+					case "sk":
+						fld.Indexes = append(fld.Indexes, Index{Name: indexParts[1], Mode: FieldModeSort})
+					default:
+						panic("invalid index tag key identifier" + p)
+					}
+
+				}
 			}
 		}
 	}
