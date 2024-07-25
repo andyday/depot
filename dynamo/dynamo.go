@@ -2,15 +2,14 @@ package dynamo
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/andyday/depot"
-	"github.com/andyday/depot/internal"
-	"github.com/andyday/depot/transform"
-	types2 "github.com/andyday/depot/types"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -46,10 +45,6 @@ func NewDatabase(cfg aws.Config) (c *DB, err error) {
 	return
 }
 
-func (d *DB) Table(name string) *depot.Table {
-	return depot.NewTable(d, name)
-}
-
 func (d *DB) Get(ctx context.Context, table string, entity interface{}) (err error) {
 	var (
 		out *dynamodb.GetItemOutput
@@ -63,7 +58,7 @@ func (d *DB) Get(ctx context.Context, table string, entity interface{}) (err err
 		return
 	}
 	if len(out.Item) <= 0 {
-		return types2.ErrEntityNotFound
+		return depot.ErrEntityNotFound
 	}
 	err = attributevalue.UnmarshalMapWithOptions(out.Item, entity, decoderOptions)
 	return
@@ -96,12 +91,12 @@ func (d *DB) Delete(ctx context.Context, table string, entity interface{}) (err 
 func (d *DB) Create(ctx context.Context, table string, entity interface{}) (err error) {
 	var (
 		item map[string]types.AttributeValue
-		k    internal.Key
+		k    depot.Key
 	)
 	if item, err = attributevalue.MarshalMapWithOptions(entity, encoderOptions); err != nil {
 		return
 	}
-	if k, err = internal.EntityKey(entity); err != nil {
+	if k, err = depot.EntityKey(entity); err != nil {
 		return
 	}
 
@@ -111,15 +106,15 @@ func (d *DB) Create(ctx context.Context, table string, entity interface{}) (err 
 		ExpressionAttributeNames: map[string]string{"#pk": k.Partition.Name},
 		ConditionExpression:      aws.String("attribute_not_exists(#pk)"),
 	}); errorIsConditionCheckFailure(err) {
-		return types2.ErrEntityAlreadyExists
+		return depot.ErrEntityAlreadyExists
 	}
 	return
 }
 
-func (d *DB) Update(ctx context.Context, table string, entity interface{}) (err error) {
+func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ...depot.UpdateOp) (err error) {
 	var (
 		key     map[string]types.AttributeValue
-		updates map[string]interface{}
+		updates []depot.Update
 		names   = make(map[string]string)
 		values  = make(map[string]types.AttributeValue)
 		mv      types.AttributeValue
@@ -128,16 +123,16 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}) (err 
 	if key, err = keyFromEntity(entity); err != nil {
 		return
 	}
-	if updates, err = internal.EntityUpdates(entity); err != nil {
+	if updates, err = depot.EntityUpdates(entity, op); err != nil {
 		return
 	}
 
-	for k, v := range updates {
-		names["#"+k] = k
-		if mv, err = updateValue(v); err != nil {
+	for _, u := range updates {
+		names["#"+u.Name] = u.Name
+		if mv, err = updateValue(u); err != nil {
 			return err
 		}
-		values[":"+k] = mv
+		values[":"+u.Name] = mv
 	}
 
 	set, add := updateExpressionParts(updates)
@@ -164,7 +159,64 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}) (err 
 	return
 }
 
-func keyMap(k internal.Key) (m map[string]interface{}) {
+func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, entities interface{}, op ...depot.QueryOp) (nextPage string, err error) {
+	var (
+		idx        *string
+		names      = make(map[string]string)
+		values     = make(map[string]types.AttributeValue)
+		conditions []depot.Condition
+		cv         types.AttributeValue
+		res        *dynamodb.QueryOutput
+		keyExp     *string
+		filterExp  *string
+		limit      *int32
+		page       map[string]types.AttributeValue
+		asc        *bool
+	)
+	if kind != "" {
+		idx = &kind
+	}
+
+	if conditions, err = depot.EntityConditions(kind, entity, op); err != nil {
+		return
+	}
+
+	for _, c := range conditions {
+		names["#"+c.Name] = c.Name
+		if c.Value != nil {
+			if cv, err = conditionValue(c); err != nil {
+				return
+			}
+			values[":"+c.Name] = cv
+		}
+	}
+
+	keyExp, filterExp = queryExpressionParts(conditions)
+	if limit, page, asc, err = queryDirectives(op); err != nil {
+		return
+	}
+
+	if res, err = d.dynamo.Query(ctx, &dynamodb.QueryInput{
+		TableName:                 aws.String(table),
+		IndexName:                 idx,
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+		KeyConditionExpression:    keyExp,
+		FilterExpression:          filterExp,
+		Limit:                     limit,
+		ExclusiveStartKey:         page,
+		ScanIndexForward:          asc,
+	}); err != nil {
+		return
+	}
+
+	if err = unmarshalEntities(res.Items, entities); err != nil {
+		return
+	}
+	return EncodePage(res.LastEvaluatedKey)
+}
+
+func keyMap(k depot.Key) (m map[string]interface{}) {
 	m = make(map[string]interface{})
 	m[k.Partition.Name] = k.Partition.Value
 	if k.Sort.Name != "" {
@@ -174,8 +226,8 @@ func keyMap(k internal.Key) (m map[string]interface{}) {
 }
 
 func keyFromEntity(entity interface{}) (key map[string]types.AttributeValue, err error) {
-	var k internal.Key
-	if k, err = internal.EntityKey(entity); err != nil {
+	var k depot.Key
+	if k, err = depot.EntityKey(entity); err != nil {
 		return
 	}
 	key, err = attributevalue.MarshalMap(keyMap(k))
@@ -194,34 +246,162 @@ func unmarshalEntity(item map[string]types.AttributeValue, entity interface{}) (
 	return
 }
 
-func updateExpressionParts(updates map[string]interface{}) (set, add []string) {
-	for k, v := range updates {
-		if tf, ok := v.(*transform.Transform); ok {
-			switch tf.Type {
-			case transform.TypeAdd:
-				add = append(add, fmt.Sprintf("#%s :%s", k, k))
-			case transform.TypeSubtract:
-				add = append(add, fmt.Sprintf("#%s :%s", k, k))
-			default:
-				continue
-			}
-		} else {
-			set = append(set, fmt.Sprintf("#%s = :%s", k, k))
+func unmarshalEntities(items []map[string]types.AttributeValue, entities interface{}) (err error) {
+	return attributevalue.UnmarshalListOfMapsWithOptions(items, entities, decoderOptions)
+}
+
+func updateExpressionParts(updates []depot.Update) (set, add []string) {
+	for _, u := range updates {
+		switch u.Op.(type) {
+		case *depot.AddUpdateOp:
+			add = append(add, fmt.Sprintf("#%s :%s", u.Name, u.Name))
+		case *depot.SubtractUpdateOp:
+			add = append(add, fmt.Sprintf("#%s :%s", u.Name, u.Name))
+		default:
+			set = append(set, fmt.Sprintf("#%s = :%s", u.Name, u.Name))
 		}
 	}
 	return
 }
 
-func updateValue(v interface{}) (av types.AttributeValue, err error) {
-	if tf, ok := v.(*transform.Transform); ok {
-		switch tf.Type {
-		case transform.TypeSubtract:
-			v = internal.NegateValue(tf.Value)
+func queryExpressionParts(conditions []depot.Condition) (keyExp, filterExp *string) {
+	var (
+		keyParts    []string
+		filterParts []string
+	)
+	for _, u := range conditions {
+		var exp string
+		switch u.Op.(type) {
+		case *depot.EqualQueryCondition:
+			exp = fmt.Sprintf("#%s = :%s", u.Name, u.Name)
+		case *depot.NotEqualQueryCondition:
+			exp = fmt.Sprintf("#%s <> :%s", u.Name, u.Name)
+		case *depot.LTQueryCondition:
+			exp = fmt.Sprintf("#%s < :%s", u.Name, u.Name)
+		case *depot.LTEQueryCondition:
+			exp = fmt.Sprintf("#%s <= :%s", u.Name, u.Name)
+		case *depot.GTQueryCondition:
+			exp = fmt.Sprintf("#%s > :%s", u.Name, u.Name)
+		case *depot.GTEQueryCondition:
+			exp = fmt.Sprintf("#%s >= :%s", u.Name, u.Name)
+		case *depot.ExistsQueryCondition:
+			exp = fmt.Sprintf("attribute_exists(#%s)", u.Name)
+		case *depot.NotExistsQueryCondition:
+			exp = fmt.Sprintf("attribute_not_exists(#%s)", u.Name)
+		case *depot.PrefixQueryCondition:
+			exp = fmt.Sprintf("begins_with(#%s, :%s)", u.Name, u.Name)
+		case *depot.ContainsQueryCondition:
+			exp = fmt.Sprintf("contains(#%s, :%s)", u.Name, u.Name)
 		default:
-			v = tf.Value
+			exp = fmt.Sprintf("#%s = :%s", u.Name, u.Name)
+		}
+
+		if u.KeyType == depot.KeyTypeNone {
+			filterParts = append(filterParts, exp)
+		} else {
+			keyParts = append(keyParts, exp)
 		}
 	}
+	if len(keyParts) > 0 {
+		keyExp = aws.String(strings.Join(keyParts, " AND "))
+	}
+	if len(filterParts) > 0 {
+		filterExp = aws.String(strings.Join(filterParts, " AND "))
+	}
+	return
+}
+
+func queryDirectives(ops []depot.QueryOp) (limit *int32, page map[string]types.AttributeValue, asc *bool, err error) {
+	for _, op := range ops {
+		if d, ok := op.(depot.QueryDirective); ok {
+			switch v := d.(type) {
+			case *depot.LimitQueryDirective:
+				limit = aws.Int32(int32(v.Limit))
+			case *depot.PageQueryDirective:
+				if page, err = DecodePage(v.Page); err != nil {
+					return
+				}
+			case *depot.AscQueryDirective:
+				asc = aws.Bool(true)
+			case *depot.DescQueryDirective:
+				asc = aws.Bool(false)
+			}
+		}
+	}
+	return
+}
+
+func DecodePage(encoded string) (decoded map[string]types.AttributeValue, err error) {
+	var (
+		bytes []byte
+		m     = make(map[string]map[string]string)
+	)
+	decoded = make(map[string]types.AttributeValue)
+	if bytes, err = base64.RawURLEncoding.DecodeString(encoded); err != nil {
+		return
+	}
+	if err = json.Unmarshal(bytes, &m); err != nil {
+		return
+	}
+	for k, v := range m {
+		for kk, vv := range v {
+			switch kk {
+			case "S":
+				decoded[k] = &types.AttributeValueMemberS{Value: vv}
+			case "N":
+				decoded[k] = &types.AttributeValueMemberN{Value: vv}
+			}
+		}
+	}
+
+	return
+
+}
+
+func EncodePage(decoded map[string]types.AttributeValue) (encoded string, err error) {
+	if decoded == nil {
+		return "", nil
+	}
+	var (
+		bytes []byte
+		m     = make(map[string]map[string]string)
+	)
+	for k, v := range decoded {
+		switch vv := v.(type) {
+		case *types.AttributeValueMemberS:
+			m[k] = map[string]string{"S": vv.Value}
+		case *types.AttributeValueMemberN:
+			m[k] = map[string]string{"N": vv.Value}
+		}
+	}
+	if bytes, err = json.Marshal(m); err != nil {
+		return
+	}
+	encoded = base64.RawURLEncoding.EncodeToString(bytes)
+	return
+}
+
+func updateValue(u depot.Update) (av types.AttributeValue, err error) {
+	var v interface{}
+	switch u.Op.(type) {
+	case *depot.SubtractUpdateOp:
+		v = depot.NegateValue(u.Value)
+	case *depot.AddUpdateOp:
+		v = u.Value
+	}
 	av, err = attributevalue.Marshal(v)
+	return
+}
+
+func conditionValue(c depot.Condition) (av types.AttributeValue, err error) {
+	// var v interface{}
+	// switch c.Op.Type {
+	// case depot.TypeSubtract:
+	// 	v = depot.NegateValue(c.Value)
+	// default:
+	// 	v = c.Value
+	// }
+	av, err = attributevalue.Marshal(c.Value)
 	return
 }
 

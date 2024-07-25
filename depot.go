@@ -1,41 +1,71 @@
 package depot
 
-import "context"
+import (
+	"context"
+)
 
 type Database interface {
-	Table(name string) *Table
 	Get(ctx context.Context, table string, entity interface{}) error
 	Put(ctx context.Context, table string, entity interface{}) error
 	Delete(ctx context.Context, table string, entity interface{}) error
 	Create(ctx context.Context, table string, entity interface{}) error
-	Update(ctx context.Context, table string, entity interface{}) error
+	Update(ctx context.Context, table string, entity interface{}, op ...UpdateOp) error
+	Query(ctx context.Context, table, kind string, entity interface{}, entities interface{}, op ...QueryOp) (string, error)
 }
 
-type Table struct {
+type Table[T any] interface {
+	Put(ctx context.Context, entity T) (T, error)
+	Get(ctx context.Context, entity T) (T, error)
+	Delete(ctx context.Context, entity T) (T, error)
+	Create(ctx context.Context, entity T) (T, error)
+	Update(ctx context.Context, entity T, op ...UpdateOp) (T, error)
+	Query(ctx context.Context, kind string, entity T, op ...QueryOp) ([]T, string, error)
+}
+
+type table[T any] struct {
 	db    Database
 	table string
 }
 
-func NewTable(db Database, table string) *Table {
-	return &Table{db: db, table: table}
+func NewTable[T any](db Database, tbl string) Table[T] {
+	return &table[T]{db: db, table: tbl}
 }
 
-func (t *Table) Put(ctx context.Context, entity interface{}) error {
-	return t.db.Put(ctx, t.table, entity)
+func (t *table[T]) Put(ctx context.Context, entity T) (out T, err error) {
+	if err = t.db.Put(ctx, t.table, &entity); err != nil {
+		return
+	}
+	return entity, nil
 }
 
-func (t *Table) Get(ctx context.Context, entity interface{}) error {
-	return t.db.Get(ctx, t.table, entity)
+func (t *table[T]) Get(ctx context.Context, entity T) (out T, err error) {
+	if err = t.db.Get(ctx, t.table, &entity); err != nil {
+		return
+	}
+	return entity, nil
 }
 
-func (t *Table) Delete(ctx context.Context, entity interface{}) error {
-	return t.db.Delete(ctx, t.table, entity)
+func (t *table[T]) Delete(ctx context.Context, entity T) (out T, err error) {
+	if err = t.db.Delete(ctx, t.table, &entity); err != nil {
+		return
+	}
+	return entity, nil
 }
 
-func (t *Table) Create(ctx context.Context, entity interface{}) error {
-	return t.db.Create(ctx, t.table, entity)
+func (t *table[T]) Create(ctx context.Context, entity T) (out T, err error) {
+	if err = t.db.Create(ctx, t.table, &entity); err != nil {
+		return
+	}
+	return entity, nil
 }
 
-func (t *Table) Update(ctx context.Context, entity interface{}) error {
-	return t.db.Update(ctx, t.table, entity)
+func (t *table[T]) Update(ctx context.Context, entity T, op ...UpdateOp) (out T, err error) {
+	if err = t.db.Update(ctx, t.table, &entity, op...); err != nil {
+		return
+	}
+	return entity, nil
+}
+func (t *table[T]) Query(ctx context.Context, kind string, entityFilter T, op ...QueryOp) (entities []T, nextPage string, err error) {
+	nextPage, err = t.db.Query(ctx, t.table, kind, &entityFilter, &entities, op...)
+	return
 }
