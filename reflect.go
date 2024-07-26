@@ -18,6 +18,7 @@ type Key struct {
 type Property struct {
 	Name  string
 	Value interface{}
+	Index bool
 }
 
 func EntityKey(entity interface{}) (key Key, err error) {
@@ -59,7 +60,7 @@ func EntityProperties(entity interface{}) (props []Property, err error) {
 		if f.Mode == FieldModeExclude || (f.Mode == FieldModeOmitEmpty && fv.IsZero()) {
 			continue
 		}
-		props = append(props, Property{Name: f.Name, Value: fv.Interface()})
+		props = append(props, Property{Name: f.Name, Value: fv.Interface(), Index: NeedsIndex(f)})
 	}
 	return
 }
@@ -86,7 +87,14 @@ func EntityFromPropertyMap(props map[string]Property, entity interface{}) (err e
 		fld := v.Field(i)
 		if p, ok := props[f.Name]; ok {
 			pv := reflect.ValueOf(p.Value)
-			fld.Set(pv)
+			if fld.Kind() == reflect.Ptr && pv.Kind() != reflect.Ptr {
+				if fld.IsNil() {
+					fld.Set(reflect.New(fld.Type().Elem()))
+				}
+				fld.Elem().Set(pv)
+			} else {
+				fld.Set(pv)
+			}
 		}
 	}
 	return
@@ -192,6 +200,18 @@ func GetMode(kind string, f Field) FieldMode {
 		}
 	}
 	return f.Mode
+}
+
+func NeedsIndex(f Field) bool {
+	if f.Mode == FieldModePartition || f.Mode == FieldModeSort {
+		return true
+	}
+	for _, index := range f.Indexes {
+		if index.Mode == FieldModeExclude || index.Mode == FieldModeSort {
+			return true
+		}
+	}
+	return false
 }
 
 func GetUpdateOp(ops []UpdateOp, field string) UpdateOp {

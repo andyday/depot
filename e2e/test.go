@@ -13,12 +13,12 @@ import (
 var (
 	testWidgetKey = Widget{TenantID: "tenant", ID: "widget"}
 	testWidget    = Widget{
-		TenantID:    "tenant",
-		ID:          "widget",
-		Name:        "Widget",
-		Description: "Test Widget",
-		CreatedAt:   time.Now().UTC(),
-		UpdatedAt:   time.Now().UTC(),
+		TenantID:       "tenant",
+		ID:             "widget",
+		Name:           "Widget",
+		DescriptionXXX: "Test Widget",
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
 	}
 
 	testWidgets = []Widget{
@@ -26,7 +26,7 @@ var (
 			TenantID:            "tenant",
 			ID:                  "widget1",
 			Name:                "Widget 1",
-			Description:         "Test Widget 1",
+			DescriptionXXX:      "Test Widget 1",
 			Category:            "category1",
 			ExpirationPartition: 1,
 			Expiration:          aws.Time(time.Now().UTC().Add(-time.Hour)),
@@ -37,7 +37,7 @@ var (
 			TenantID:            "tenant",
 			ID:                  "widget2",
 			Name:                "Widget 2",
-			Description:         "Test Widget 2",
+			DescriptionXXX:      "Test Widget 2",
 			Category:            "category2",
 			ExpirationPartition: 1,
 			Expiration:          aws.Time(time.Now().UTC().Add(-time.Hour)),
@@ -48,7 +48,7 @@ var (
 			TenantID:            "tenant",
 			ID:                  "widget3",
 			Name:                "The Widget 3",
-			Description:         "Test Widget 3",
+			DescriptionXXX:      "Test Widget 3",
 			Category:            "category1",
 			ExpirationPartition: 1,
 			Expiration:          aws.Time(time.Now().UTC().Add(time.Hour)),
@@ -59,7 +59,7 @@ var (
 			TenantID:            "tenant",
 			ID:                  "widget4",
 			Name:                "Widget 4",
-			Description:         "Test Widget 4",
+			DescriptionXXX:      "Test Widget 4",
 			Category:            "category3",
 			ExpirationPartition: 1,
 			Expiration:          aws.Time(time.Now().UTC().Add(time.Hour)),
@@ -67,20 +67,20 @@ var (
 			UpdatedAt:           time.Now().UTC(),
 		},
 		{
-			TenantID:    "tenant",
-			ID:          "widget5",
-			Name:        "Widget 5",
-			Description: "Test Widget 5",
-			CreatedAt:   time.Now().UTC().Add(3 * time.Minute),
-			UpdatedAt:   time.Now().UTC(),
+			TenantID:       "tenant",
+			ID:             "widget5",
+			Name:           "Widget 5",
+			DescriptionXXX: "Test Widget 5",
+			CreatedAt:      time.Now().UTC().Add(3 * time.Minute),
+			UpdatedAt:      time.Now().UTC(),
 		},
 		{
-			TenantID:    "tenant",
-			ID:          "widget6",
-			Name:        "Widget 6",
-			Description: "Test Widget 6",
-			CreatedAt:   time.Now().UTC().Add(4 * time.Minute),
-			UpdatedAt:   time.Now().UTC(),
+			TenantID:       "tenant",
+			ID:             "widget6",
+			Name:           "Widget 6",
+			DescriptionXXX: "Test Widget 6",
+			CreatedAt:      time.Now().UTC().Add(4 * time.Minute),
+			UpdatedAt:      time.Now().UTC(),
 		},
 	}
 )
@@ -90,7 +90,7 @@ type Widget struct {
 	ID                  string     `depot:"id,sk"`
 	Name                string     `depot:"name,index:named:sk"`
 	Category            string     `depot:"category,omitempty,index:category:sk"`
-	Description         string     `depot:"description,omitempty"`
+	DescriptionXXX      string     `depot:"description,omitempty"`
 	Count               int64      `depot:"count,omitempty"`
 	Total               int64      `depot:"total,omitempty"`
 	ExpirationPartition int64      `depot:"expirationPartition,omitempty,index:expired:pk"`
@@ -108,7 +108,7 @@ type Suite struct {
 
 func (s *Suite) SetupTest() {
 	s.ctx = context.Background()
-	s.widget = depot.NewTable[Widget](s.db, "depot-widget")
+	s.widget = depot.NewTable[Widget](s.db, "depot-dev-widget")
 	_, err := s.widget.Delete(s.ctx, testWidgetKey)
 	s.NoError(err)
 	_, err = s.widget.Get(s.ctx, testWidgetKey)
@@ -152,12 +152,12 @@ func TestUpdate(s *Suite) {
 	_, err := s.widget.Create(s.ctx, expected)
 	s.NoError(err)
 	_, err = s.widget.Update(s.ctx, Widget{
-		TenantID:    expected.TenantID,
-		ID:          expected.ID,
-		Description: "New Description",
-		Count:       5,
-		Total:       5,
-		UpdatedAt:   time.Now().UTC(),
+		TenantID:       expected.TenantID,
+		ID:             expected.ID,
+		DescriptionXXX: "New Description",
+		Count:          5,
+		Total:          5,
+		UpdatedAt:      time.Now().UTC(),
 	}, depot.Add("count"), depot.Subtract("total"))
 	s.NoError(err)
 	widget, err = s.widget.Get(s.ctx, testWidgetKey)
@@ -165,7 +165,7 @@ func TestUpdate(s *Suite) {
 	s.Equal(expected.TenantID, widget.TenantID)
 	s.Equal(expected.ID, widget.ID)
 	s.Equal(expected.Name, widget.Name)
-	s.Equal("New Description", widget.Description)
+	s.Equal("New Description", widget.DescriptionXXX)
 	s.Equal(int64(5), widget.Count)
 	s.Equal(int64(-5), widget.Total)
 	s.Equal(expected.CreatedAt, widget.CreatedAt)
@@ -199,7 +199,7 @@ func TestQueryNamedIndex(s *Suite) {
 	widgets, page, err := s.widget.Query(s.ctx,
 		"named",
 		Widget{TenantID: "tenant", Name: "Widget"},
-		depot.Prefix("name"),
+		depot.GreaterThan("name"),
 		depot.Exists("expiration"),
 		depot.Limit(2))
 
@@ -212,7 +212,7 @@ func TestQueryNamedIndex(s *Suite) {
 	widgets, page, err = s.widget.Query(s.ctx,
 		"named",
 		Widget{TenantID: "tenant", Name: "Widget"},
-		depot.Prefix("name"),
+		depot.GreaterThan("name"),
 		depot.Exists("expiration"),
 		depot.Limit(2),
 		depot.Page(page))
@@ -225,7 +225,7 @@ func TestQueryNamedIndex(s *Suite) {
 	widgets, page, err = s.widget.Query(s.ctx,
 		"named",
 		Widget{TenantID: "tenant", Name: "Widget"},
-		depot.Prefix("name"),
+		depot.GreaterThan("name"),
 		depot.Exists("expiration"),
 		depot.Limit(2),
 		depot.Page(page))

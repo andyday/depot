@@ -269,34 +269,34 @@ func queryExpressionParts(conditions []depot.Condition) (keyExp, filterExp *stri
 		keyParts    []string
 		filterParts []string
 	)
-	for _, u := range conditions {
+	for _, c := range conditions {
 		var exp string
-		switch u.Op.(type) {
+		switch c.Op.(type) {
 		case *depot.EqualQueryCondition:
-			exp = fmt.Sprintf("#%s = :%s", u.Name, u.Name)
+			exp = fmt.Sprintf("#%s = :%s", c.Name, c.Name)
 		case *depot.NotEqualQueryCondition:
-			exp = fmt.Sprintf("#%s <> :%s", u.Name, u.Name)
+			exp = fmt.Sprintf("#%s <> :%s", c.Name, c.Name)
 		case *depot.LTQueryCondition:
-			exp = fmt.Sprintf("#%s < :%s", u.Name, u.Name)
+			exp = fmt.Sprintf("#%s < :%s", c.Name, c.Name)
 		case *depot.LTEQueryCondition:
-			exp = fmt.Sprintf("#%s <= :%s", u.Name, u.Name)
+			exp = fmt.Sprintf("#%s <= :%s", c.Name, c.Name)
 		case *depot.GTQueryCondition:
-			exp = fmt.Sprintf("#%s > :%s", u.Name, u.Name)
+			exp = fmt.Sprintf("#%s > :%s", c.Name, c.Name)
 		case *depot.GTEQueryCondition:
-			exp = fmt.Sprintf("#%s >= :%s", u.Name, u.Name)
+			exp = fmt.Sprintf("#%s >= :%s", c.Name, c.Name)
 		case *depot.ExistsQueryCondition:
-			exp = fmt.Sprintf("attribute_exists(#%s)", u.Name)
-		case *depot.NotExistsQueryCondition:
-			exp = fmt.Sprintf("attribute_not_exists(#%s)", u.Name)
-		case *depot.PrefixQueryCondition:
-			exp = fmt.Sprintf("begins_with(#%s, :%s)", u.Name, u.Name)
-		case *depot.ContainsQueryCondition:
-			exp = fmt.Sprintf("contains(#%s, :%s)", u.Name, u.Name)
+			exp = fmt.Sprintf("attribute_exists(#%s)", c.Name)
+		// case *depot.NotExistsQueryCondition:
+		// 	exp = fmt.Sprintf("attribute_not_exists(#%s)", c.Name)
+		// case *depot.PrefixQueryCondition:
+		// 	exp = fmt.Sprintf("begins_with(#%s, :%s)", c.Name, c.Name)
+		// case *depot.ContainsQueryCondition:
+		// 	exp = fmt.Sprintf("contains(#%s, :%s)", c.Name, c.Name)
 		default:
-			exp = fmt.Sprintf("#%s = :%s", u.Name, u.Name)
+			exp = fmt.Sprintf("#%s = :%s", c.Name, c.Name)
 		}
 
-		if u.KeyType == depot.KeyTypeNone {
+		if c.KeyType == depot.KeyTypeNone {
 			filterParts = append(filterParts, exp)
 		} else {
 			keyParts = append(keyParts, exp)
@@ -387,6 +387,8 @@ func updateValue(u depot.Update) (av types.AttributeValue, err error) {
 	case *depot.SubtractUpdateOp:
 		v = depot.NegateValue(u.Value)
 	case *depot.AddUpdateOp:
+		v = u.Value
+	default:
 		v = u.Value
 	}
 	av, err = attributevalue.Marshal(v)

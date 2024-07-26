@@ -32,53 +32,74 @@ type LTEQueryCondition struct{ field string }
 type GTQueryCondition struct{ field string }
 type GTEQueryCondition struct{ field string }
 type ExistsQueryCondition struct{ field string }
-type NotExistsQueryCondition struct{ field string }
-type PrefixQueryCondition struct{ field string }
-type ContainsQueryCondition struct{ field string }
+type InQueryCondition struct {
+	field string
+	list  []interface{}
+}
+type NotInQueryCondition struct {
+	field string
+	list  []interface{}
+}
 
-func (*EqualQueryCondition) isQueryOp()     {}
-func (*NotEqualQueryCondition) isQueryOp()  {}
-func (*LTQueryCondition) isQueryOp()        {}
-func (*LTEQueryCondition) isQueryOp()       {}
-func (*GTQueryCondition) isQueryOp()        {}
-func (*GTEQueryCondition) isQueryOp()       {}
-func (*ExistsQueryCondition) isQueryOp()    {}
-func (*NotExistsQueryCondition) isQueryOp() {}
-func (*PrefixQueryCondition) isQueryOp()    {}
-func (*ContainsQueryCondition) isQueryOp()  {}
+// type NotExistsQueryCondition struct{ field string }
+// type PrefixQueryCondition struct{ field string }
+// type ContainsQueryCondition struct{ field string }
 
-func (q *EqualQueryCondition) Field() string     { return q.field }
-func (q *NotEqualQueryCondition) Field() string  { return q.field }
-func (q *LTQueryCondition) Field() string        { return q.field }
-func (q *LTEQueryCondition) Field() string       { return q.field }
-func (q *GTQueryCondition) Field() string        { return q.field }
-func (q *GTEQueryCondition) Field() string       { return q.field }
-func (q *ExistsQueryCondition) Field() string    { return q.field }
-func (q *NotExistsQueryCondition) Field() string { return q.field }
-func (q *PrefixQueryCondition) Field() string    { return q.field }
-func (q *ContainsQueryCondition) Field() string  { return q.field }
+func (*EqualQueryCondition) isQueryOp()    {}
+func (*NotEqualQueryCondition) isQueryOp() {}
+func (*LTQueryCondition) isQueryOp()       {}
+func (*LTEQueryCondition) isQueryOp()      {}
+func (*GTQueryCondition) isQueryOp()       {}
+func (*GTEQueryCondition) isQueryOp()      {}
+func (*ExistsQueryCondition) isQueryOp()   {}
+func (*InQueryCondition) isQueryOp()       {}
+func (*NotInQueryCondition) isQueryOp()    {}
 
-func (q *EqualQueryCondition) Valueless() bool     { return false }
-func (q *NotEqualQueryCondition) Valueless() bool  { return false }
-func (q *LTQueryCondition) Valueless() bool        { return false }
-func (q *LTEQueryCondition) Valueless() bool       { return false }
-func (q *GTQueryCondition) Valueless() bool        { return false }
-func (q *GTEQueryCondition) Valueless() bool       { return false }
-func (q *ExistsQueryCondition) Valueless() bool    { return true }
-func (q *NotExistsQueryCondition) Valueless() bool { return true }
-func (q *PrefixQueryCondition) Valueless() bool    { return false }
-func (q *ContainsQueryCondition) Valueless() bool  { return false }
+// func (*NotExistsQueryCondition) isQueryOp() {}
+// func (*PrefixQueryCondition) isQueryOp()    {}
+// func (*ContainsQueryCondition) isQueryOp()  {}
 
-func (*EqualQueryCondition) isQueryCondition()     {}
-func (*NotEqualQueryCondition) isQueryCondition()  {}
-func (*LTQueryCondition) isQueryCondition()        {}
-func (*LTEQueryCondition) isQueryCondition()       {}
-func (*GTQueryCondition) isQueryCondition()        {}
-func (*GTEQueryCondition) isQueryCondition()       {}
-func (*ExistsQueryCondition) isQueryCondition()    {}
-func (*NotExistsQueryCondition) isQueryCondition() {}
-func (*PrefixQueryCondition) isQueryCondition()    {}
-func (*ContainsQueryCondition) isQueryCondition()  {}
+func (q *EqualQueryCondition) Field() string    { return q.field }
+func (q *NotEqualQueryCondition) Field() string { return q.field }
+func (q *LTQueryCondition) Field() string       { return q.field }
+func (q *LTEQueryCondition) Field() string      { return q.field }
+func (q *GTQueryCondition) Field() string       { return q.field }
+func (q *GTEQueryCondition) Field() string      { return q.field }
+func (q *ExistsQueryCondition) Field() string   { return q.field }
+func (q *InQueryCondition) Field() string       { return q.field }
+func (q *NotInQueryCondition) Field() string    { return q.field }
+
+// func (q *NotExistsQueryCondition) Field() string { return q.field }
+// func (q *PrefixQueryCondition) Field() string    { return q.field }
+// func (q *ContainsQueryCondition) Field() string  { return q.field }
+
+func (q *EqualQueryCondition) Valueless() bool    { return false }
+func (q *NotEqualQueryCondition) Valueless() bool { return false }
+func (q *LTQueryCondition) Valueless() bool       { return false }
+func (q *LTEQueryCondition) Valueless() bool      { return false }
+func (q *GTQueryCondition) Valueless() bool       { return false }
+func (q *GTEQueryCondition) Valueless() bool      { return false }
+func (q *ExistsQueryCondition) Valueless() bool   { return true }
+func (q *InQueryCondition) Valueless() bool       { return true }
+func (q *NotInQueryCondition) Valueless() bool    { return true }
+
+// func (q *NotExistsQueryCondition) Valueless() bool { return true }
+// func (q *PrefixQueryCondition) Valueless() bool    { return false }
+// func (q *ContainsQueryCondition) Valueless() bool  { return false }
+
+func (*EqualQueryCondition) isQueryCondition()    {}
+func (*NotEqualQueryCondition) isQueryCondition() {}
+func (*LTQueryCondition) isQueryCondition()       {}
+func (*LTEQueryCondition) isQueryCondition()      {}
+func (*GTQueryCondition) isQueryCondition()       {}
+func (*GTEQueryCondition) isQueryCondition()      {}
+func (*ExistsQueryCondition) isQueryCondition()   {}
+func (*InQueryCondition) isQueryCondition()       {}
+func (*NotInQueryCondition) isQueryCondition()    {}
+
+// func (*NotExistsQueryCondition) isQueryCondition() {}
+// func (*PrefixQueryCondition) isQueryCondition()    {}
+// func (*ContainsQueryCondition) isQueryCondition()  {}
 
 func Equal(field string) *EqualQueryCondition            { return &EqualQueryCondition{field: field} }
 func NotEqual(field string) *NotEqualQueryCondition      { return &NotEqualQueryCondition{field: field} }
@@ -87,9 +108,17 @@ func LessThanOrEqual(field string) *LTEQueryCondition    { return &LTEQueryCondi
 func GreaterThan(field string) *GTQueryCondition         { return &GTQueryCondition{field: field} }
 func GreaterThanOrEqual(field string) *GTEQueryCondition { return &GTEQueryCondition{field: field} }
 func Exists(field string) *ExistsQueryCondition          { return &ExistsQueryCondition{field: field} }
-func NotExists(field string) *NotExistsQueryCondition    { return &NotExistsQueryCondition{field: field} }
-func Prefix(field string) *PrefixQueryCondition          { return &PrefixQueryCondition{field: field} }
-func Contains(field string) *ContainsQueryCondition      { return &ContainsQueryCondition{field: field} }
+
+func In(field string, list ...interface{}) *InQueryCondition {
+	return &InQueryCondition{field: field, list: list}
+}
+func NotIn(field string, list ...interface{}) *NotInQueryCondition {
+	return &NotInQueryCondition{field: field, list: list}
+}
+
+// func NotExists(field string) *NotExistsQueryCondition    { return &NotExistsQueryCondition{field: field} }
+// func Prefix(field string) *PrefixQueryCondition          { return &PrefixQueryCondition{field: field} }
+// func Contains(field string) *ContainsQueryCondition      { return &ContainsQueryCondition{field: field} }
 
 type AscQueryDirective struct{}
 type DescQueryDirective struct{}

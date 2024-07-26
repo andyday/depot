@@ -34,3 +34,7 @@ func (s *DatastoreSuite) TestCreate() {
 func (s *DatastoreSuite) TestUpdate() {
 	TestUpdate(&s.Suite)
 }
+
+func (s *DatastoreSuite) TestQueryCreatedIndex() {
+	TestQueryCreatedIndex(&s.Suite)
+}
