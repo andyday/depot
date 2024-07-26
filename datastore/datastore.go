@@ -3,7 +3,6 @@ package datastore
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strconv"
 
@@ -113,14 +112,14 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, entities interface{}, op ...depot.QueryOp) (page string, err error) {
 	var (
 		conditions []depot.Condition
+		sortField  string
 		offset     int
 		q          = datastore.NewQuery(table)
 	)
 
-	if conditions, err = depot.EntityConditions(kind, entity, op); err != nil {
+	if sortField, conditions, err = depot.EntityConditions(kind, entity, op); err != nil {
 		return
 	}
-	sortField := getSortField(conditions)
 	q = applyQueryConditions(q, conditions)
 	if q, offset, err = applyQueryDirectives(q, op, sortField); err != nil {
 		return
@@ -129,7 +128,7 @@ func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, 
 	if offset, err = qr.run(d.datastore.Run(ctx, q)); err != nil {
 		return
 	}
-	if err = qr.next(d.datastore.Run(ctx, q.Offset(offset))); errors.Is(err, iterator.Done) {
+	if err = qr.next(d.datastore.Run(ctx, q.Offset(offset)), false); errors.Is(err, iterator.Done) {
 		// If this is an error it means it is done at the 1st item or there was an error
 		return "", nil
 	}
@@ -160,7 +159,7 @@ func newQueryRunner(table string, list interface{}, offset int) *queryRunner {
 
 func (q *queryRunner) run(it *datastore.Iterator) (offset int, err error) {
 	for {
-		if err = q.next(it); errors.Is(err, iterator.Done) {
+		if err = q.next(it, true); errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
@@ -170,13 +169,15 @@ func (q *queryRunner) run(it *datastore.Iterator) (offset int, err error) {
 	return q.offset, nil
 }
 
-func (q *queryRunner) next(it *datastore.Iterator) (err error) {
+func (q *queryRunner) next(it *datastore.Iterator, append bool) (err error) {
 	ev := reflect.New(q.elementType)
 	if _, err = it.Next(&datastoreEntity{entity: ev.Interface()}); err != nil {
 		return
 	}
-	q.listValue.Set(reflect.Append(q.listValue, ev.Elem()))
 	q.offset++
+	if append {
+		q.listValue.Set(reflect.Append(q.listValue, ev.Elem()))
+	}
 	return
 }
 
@@ -200,15 +201,6 @@ func (q *queryRunner) next(it *datastore.Iterator) (err error) {
 // dv.Set(reflect.Append(dv, ev))
 // 	reflect.Append(v, ev.Elem())
 // }
-
-func getSortField(conditions []depot.Condition) string {
-	for _, c := range conditions {
-		if c.KeyType == depot.KeyTypeSort {
-			return c.Name
-		}
-	}
-	return ""
-}
 
 func applyQueryConditions(in *datastore.Query, conditions []depot.Condition) (q *datastore.Query) {
 	q = in
@@ -291,13 +283,7 @@ func LoadKey(kind string, entity interface{}) (k *datastore.Key, err error) {
 	if key, err = depot.EntityKey(entity); err != nil {
 		return
 	}
-	k = &datastore.Key{Kind: kind}
-	if key.Sort.Value != "" {
-		k.Name = fmt.Sprintf("%s:%s", key.Partition.Value, key.Sort.Value)
-	} else {
-		k.Name = key.Partition.Value
-	}
-	return
+	return &datastore.Key{Kind: kind, Name: key.String()}, nil
 }
 
 type datastoreEntity struct {

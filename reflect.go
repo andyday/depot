@@ -1,18 +1,27 @@
 package depot
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 )
 
 type KeyPart struct {
 	Name  string
-	Value string
+	Value interface{}
 }
 
 type Key struct {
 	Partition KeyPart
 	Sort      KeyPart
+}
+
+func (k Key) String() string {
+	if k.Sort.Value != nil {
+		return fmt.Sprintf("%v:%v", k.Partition.Value, k.Sort.Value)
+	} else {
+		return fmt.Sprintf("%v", k.Partition.Value)
+	}
 }
 
 type Property struct {
@@ -35,10 +44,10 @@ func EntityKey(entity interface{}) (key Key, err error) {
 		switch f.Mode {
 		case FieldModePartition:
 			key.Partition.Name = f.Name
-			key.Partition.Value = v.Field(i).String()
+			key.Partition.Value = v.Field(i).Interface()
 		case FieldModeSort:
 			key.Sort.Name = f.Name
-			key.Sort.Value = v.Field(i).String()
+			key.Sort.Value = v.Field(i).Interface()
 		default:
 		}
 	}
@@ -148,7 +157,7 @@ type Condition struct {
 	Op      QueryCondition
 }
 
-func EntityConditions(kind string, entity interface{}, ops []QueryOp) (conditions []Condition, err error) {
+func EntityConditions(kind string, entity interface{}, ops []QueryOp) (sortField string, conditions []Condition, err error) {
 	var (
 		s  Struct
 		v  = reflect.ValueOf(entity)
@@ -164,12 +173,6 @@ func EntityConditions(kind string, entity interface{}, ops []QueryOp) (condition
 		op := GetQueryCondition(ops, f.Name)
 		value := fv.Interface()
 
-		if fv.IsZero() {
-			value = nil
-			if !(op != nil && op.Valueless()) {
-				continue
-			}
-		}
 		mode := GetMode(kind, f)
 		switch mode {
 		case FieldModeExclude:
@@ -178,8 +181,15 @@ func EntityConditions(kind string, entity interface{}, ops []QueryOp) (condition
 			kt = KeyTypePartition
 		case FieldModeSort:
 			kt = KeyTypeSort
+			sortField = f.Name
 		default:
 			kt = KeyTypeNone
+		}
+		if fv.IsZero() {
+			value = nil
+			if !(op != nil && op.Valueless()) {
+				continue
+			}
 		}
 		conditions = append(conditions, Condition{
 			Name:    f.Name,

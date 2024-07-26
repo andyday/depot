@@ -1,6 +1,10 @@
 package depot
 
 import (
+	"encoding/base64"
+	"fmt"
+	"math"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -87,4 +91,24 @@ func TestNegateValue(t *testing.T) {
 	assert.Equal(t, int16(-5), NegateValue(int16(5)))
 	assert.Equal(t, int32(-5), NegateValue(int32(5)))
 	assert.Equal(t, int64(-5), NegateValue(int64(5)))
+}
+
+func TestMaxInt64(t *testing.T) {
+	// 9223372036854775807
+
+	digits := 0
+	for i := math.MaxInt64; i > 0; digits++ {
+		fmt.Printf("%019d\n", i)
+		i = i / 10
+	}
+	assert.Equal(t, 19, digits)
+
+	digits = 0
+	for i := math.MaxInt64; i > 0; digits++ {
+		i = i / 16
+	}
+	assert.Equal(t, 16, digits)
+
+	bi := big.NewInt(math.MaxInt64)
+	assert.Equal(t, "foo", base64.RawURLEncoding.EncodeToString(bi.Bytes()))
 }

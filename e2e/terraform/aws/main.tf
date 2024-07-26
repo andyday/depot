@@ -72,3 +72,19 @@ resource "aws_dynamodb_table" "widget" {
     projection_type = "ALL"
   }
 }
+
+resource "aws_dynamodb_table" "message" {
+  name         = "depot-${var.env}-message"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "tenantId"
+  range_key    = "id"
+
+  attribute {
+    name = "tenantId"
+    type = "S"
+  }
+  attribute {
+    name = "id"
+    type = "N"
+  }
+}

@@ -5,6 +5,7 @@ provider "google" {
 
 locals {
   widget = "depot-${var.env}-widget"
+  message = "depot-${var.env}-message"
   database = "(default)"
 }
 
@@ -105,6 +106,10 @@ resource "google_datastore_index" "named" {
     name      = "name"
     direction = "ASCENDING"
   }
+  properties {
+    name      = "expiration"
+    direction = "ASCENDING"
+  }
 }
 
 resource "google_datastore_index" "category" {
@@ -128,5 +133,17 @@ resource "google_datastore_index" "expired" {
   properties {
     name      = "expiration"
     direction = "ASCENDING"
+  }
+}
+
+resource "google_datastore_index" "message" {
+  kind = local.message
+  properties {
+    name      = "tenantId"
+    direction = "ASCENDING"
+  }
+  properties {
+    name      = "id"
+    direction = "DESCENDING"
   }
 }

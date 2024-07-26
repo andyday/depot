@@ -49,3 +49,7 @@ func (s *DynamoSuite) TestQueryCreatedIndex() {
 func (s *DynamoSuite) TestQueryNamedIndex() {
 	TestQueryNamedIndex(&s.Suite)
 }
+
+func (s *DynamoSuite) TestQueryMessage() {
+	TestQueryMessage(&s.Suite)
+}

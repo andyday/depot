@@ -38,3 +38,11 @@ func (s *DatastoreSuite) TestUpdate() {
 func (s *DatastoreSuite) TestQueryCreatedIndex() {
 	TestQueryCreatedIndex(&s.Suite)
 }
+
+func (s *DatastoreSuite) TestQueryNamedIndex() {
+	TestQueryNamedIndex(&s.Suite)
+}
+
+func (s *DatastoreSuite) TestQueryMessage() {
+	TestQueryMessage(&s.Suite)
+}

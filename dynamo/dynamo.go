@@ -177,7 +177,7 @@ func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, 
 		idx = &kind
 	}
 
-	if conditions, err = depot.EntityConditions(kind, entity, op); err != nil {
+	if _, conditions, err = depot.EntityConditions(kind, entity, op); err != nil {
 		return
 	}
 
