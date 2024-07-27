@@ -7,15 +7,19 @@ type UpdateOp interface {
 
 type AddUpdateOp struct{ field string }
 type SubtractUpdateOp struct{ field string }
+type ForceUpdateOp struct{ field string }
 
 func (*AddUpdateOp) isUpdateOp()      {}
 func (*SubtractUpdateOp) isUpdateOp() {}
+func (*ForceUpdateOp) isUpdateOp()    {}
 
 func (o *AddUpdateOp) Field() string      { return o.field }
 func (o *SubtractUpdateOp) Field() string { return o.field }
+func (o *ForceUpdateOp) Field() string    { return o.field }
 
 func Add(field string) *AddUpdateOp           { return &AddUpdateOp{field: field} }
 func Subtract(field string) *SubtractUpdateOp { return &SubtractUpdateOp{field: field} }
+func Force(field string) *ForceUpdateOp       { return &ForceUpdateOp{field: field} }
 
 type QueryOp interface{ isQueryOp() }
 type QueryCondition interface {

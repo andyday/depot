@@ -127,10 +127,12 @@ func EntityUpdates(entity interface{}, ops []UpdateOp) (updates []Update, err er
 	for i := 0; i < ln; i++ {
 		f := s[i]
 		fv := v.Field(i)
+		op := GetUpdateOp(ops, f.Name)
+		_, force := op.(*ForceUpdateOp)
 		if f.Mode == FieldModeExclude ||
 			f.Mode == FieldModePartition ||
 			f.Mode == FieldModeSort ||
-			fv.IsZero() {
+			(fv.IsZero() && !force) {
 			continue
 		}
 		updates = append(updates, Update{
