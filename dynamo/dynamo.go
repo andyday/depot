@@ -332,6 +332,9 @@ func queryDirectives(ops []depot.QueryOp) (limit *int32, page map[string]types.A
 }
 
 func DecodePage(encoded string) (decoded map[string]types.AttributeValue, err error) {
+	if encoded == "" {
+		return
+	}
 	var (
 		bytes []byte
 		m     = make(map[string]map[string]string)
