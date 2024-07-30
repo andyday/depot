@@ -74,6 +74,54 @@ func EntityProperties(entity interface{}) (props []Property, err error) {
 	return
 }
 
+func EntityMap(entity interface{}) (m map[string]interface{}, err error) {
+	var (
+		s Struct
+		v = reflect.ValueOf(entity)
+	)
+	m = make(map[string]interface{})
+	if s, v, err = GetStruct(v); err != nil {
+		return
+	}
+	ln := len(s)
+	for i := 0; i < ln; i++ {
+		f := s[i]
+		fv := v.Field(i)
+		if f.Mode == FieldModeExclude || (f.Mode == FieldModeOmitEmpty && fv.IsZero()) {
+			continue
+		}
+		m[f.Name] = fv.Interface()
+	}
+	return
+}
+
+func EntityFromMap(m map[string]interface{}, entity interface{}) (err error) {
+	var (
+		s  Struct
+		ev = reflect.ValueOf(entity)
+	)
+	if s, ev, err = GetStruct(ev); err != nil {
+		return
+	}
+	ln := len(s)
+	for i := 0; i < ln; i++ {
+		f := s[i]
+		fld := ev.Field(i)
+		if v, ok := m[f.Name]; ok {
+			pv := reflect.ValueOf(v)
+			if fld.Kind() == reflect.Ptr && pv.Kind() != reflect.Ptr {
+				if fld.IsNil() {
+					fld.Set(reflect.New(fld.Type().Elem()))
+				}
+				fld.Elem().Set(pv)
+			} else {
+				fld.Set(pv)
+			}
+		}
+	}
+	return
+}
+
 func EntityFromProperties(props []Property, entity interface{}) (err error) {
 	propMap := make(map[string]Property)
 	for _, prop := range props {
@@ -279,7 +327,7 @@ func GetStruct(v reflect.Value) (s Struct, sv reflect.Value, err error) {
 		sv = sv.Elem()
 	}
 	if sv.Kind() != reflect.Struct {
-		err = ErrEntityNotFound
+		err = ErrInvalidEntityType
 		return
 	}
 
