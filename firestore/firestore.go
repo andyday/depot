@@ -105,10 +105,15 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 	}
 
 	err = d.firestore.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) (err error) {
-		if res, err = tx.Get(doc); err != nil {
+		var useSet bool
+		if res, err = tx.Get(doc); status.Code(err) == codes.NotFound {
+			existing = make(map[string]interface{})
+			useSet = true
+		} else if err != nil {
 			return
+		} else {
+			existing = res.Data()
 		}
-		existing = res.Data()
 		for _, u = range depotUpdates {
 			v = existing[u.Name]
 			switch u.Op.(type) {
@@ -119,9 +124,17 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 			default:
 				v = u.Value
 			}
-			updates = append(updates, firestore.Update{Path: u.Name, Value: v})
+			if useSet {
+				existing[u.Name] = v
+			} else {
+				updates = append(updates, firestore.Update{Path: u.Name, Value: v})
+			}
 		}
-		err = tx.Update(doc, updates)
+		if useSet {
+			err = tx.Set(doc, existing)
+		} else {
+			err = tx.Update(doc, updates)
+		}
 		return
 	})
 	return
@@ -248,14 +261,12 @@ func applyQueryDirectives(in firestore.Query, ops []depot.QueryOp, sortField str
 			case *depot.LimitQueryDirective:
 				q = q.Limit(v.Limit)
 			case *depot.PageQueryDirective:
-				// if cursor, err = datastore.DecodeCursor(v.Page); err != nil {
-				// 	return
-				// }
-				// q = q.Start(cursor)
-				if offset, err = strconv.Atoi(v.Page); err != nil {
-					return
+				if v.Page != "" {
+					if offset, err = strconv.Atoi(v.Page); err != nil {
+						return
+					}
+					q = q.Offset(offset)
 				}
-				q = q.Offset(offset)
 			case *depot.AscQueryDirective:
 				if sortField == "" {
 					return q, 0, depot.ErrNoSortField
