@@ -124,7 +124,7 @@ func EntityFromMap(m map[string]interface{}, entity interface{}, convertTTL bool
 				}
 				fld.Elem().Set(pv)
 			} else {
-				fld.Set(pv)
+				fld.Set(pv.Convert(fld.Type()))
 			}
 		}
 	}
