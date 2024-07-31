@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type KeyPart struct {
@@ -74,7 +75,7 @@ func EntityProperties(entity interface{}) (props []Property, err error) {
 	return
 }
 
-func EntityMap(entity interface{}) (m map[string]interface{}, err error) {
+func EntityMap(entity interface{}, convertTTL bool) (m map[string]interface{}, err error) {
 	var (
 		s Struct
 		v = reflect.ValueOf(entity)
@@ -90,12 +91,16 @@ func EntityMap(entity interface{}) (m map[string]interface{}, err error) {
 		if f.Mode == FieldModeExclude || (f.Mode == FieldModeOmitEmpty && fv.IsZero()) {
 			continue
 		}
-		m[f.Name] = fv.Interface()
+		fvi := fv.Interface()
+		if f.TTL && convertTTL {
+			fvi = time.Unix(fvi.(int64), 0)
+		}
+		m[f.Name] = fvi
 	}
 	return
 }
 
-func EntityFromMap(m map[string]interface{}, entity interface{}) (err error) {
+func EntityFromMap(m map[string]interface{}, entity interface{}, convertTTL bool) (err error) {
 	var (
 		s  Struct
 		ev = reflect.ValueOf(entity)
@@ -108,6 +113,10 @@ func EntityFromMap(m map[string]interface{}, entity interface{}) (err error) {
 		f := s[i]
 		fld := ev.Field(i)
 		if v, ok := m[f.Name]; ok {
+			v = RealSlice(v)
+			if f.TTL && convertTTL {
+				v = (v.(time.Time)).Unix()
+			}
 			pv := reflect.ValueOf(v)
 			if fld.Kind() == reflect.Ptr && pv.Kind() != reflect.Ptr {
 				if fld.IsNil() {
@@ -118,6 +127,32 @@ func EntityFromMap(m map[string]interface{}, entity interface{}) (err error) {
 				fld.Set(pv)
 			}
 		}
+	}
+	return
+}
+
+func RealSlice(v interface{}) interface{} {
+	if s, ok := v.([]interface{}); !ok {
+		return v
+	} else if len(s) <= 0 {
+		return v
+	} else {
+		switch s[0].(type) {
+		case string:
+			return ConvertSlice[string](s)
+		case int:
+			return ConvertSlice[int](s)
+		case int64:
+			return ConvertSlice[int64](s)
+		default:
+			return v
+		}
+	}
+}
+
+func ConvertSlice[T any](in []interface{}) (out []T) {
+	for _, e := range in {
+		out = append(out, e.(T))
 	}
 	return
 }
@@ -306,6 +341,7 @@ type Field struct {
 	Name    string
 	Mode    FieldMode
 	Indexes []Index
+	TTL     bool
 }
 
 type Index struct {
@@ -367,6 +403,8 @@ func field(typ reflect.Type, i int) (fld Field) {
 				fld.Mode = FieldModeSort
 			case "omitempty":
 				fld.Mode = FieldModeOmitEmpty
+			case "ttl":
+				fld.TTL = true
 			default:
 				if strings.HasPrefix(p, "index:") {
 					indexParts := strings.Split(p, ":")

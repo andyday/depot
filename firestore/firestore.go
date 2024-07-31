@@ -38,7 +38,7 @@ func (d *DB) Put(ctx context.Context, table string, entity interface{}) (err err
 	if doc, err = d.doc(table, entity); err != nil {
 		return
 	}
-	if m, err = depot.EntityMap(entity); err != nil {
+	if m, err = depot.EntityMap(entity, true); err != nil {
 		return
 	}
 	_, err = doc.Set(ctx, m)
@@ -58,7 +58,7 @@ func (d *DB) Get(ctx context.Context, table string, entity interface{}) (err err
 	} else if err != nil {
 		return
 	}
-	return depot.EntityFromMap(res.Data(), entity)
+	return depot.EntityFromMap(res.Data(), entity, true)
 }
 
 func (d *DB) Delete(ctx context.Context, table string, entity interface{}) (err error) {
@@ -78,7 +78,7 @@ func (d *DB) Create(ctx context.Context, table string, entity interface{}) (err 
 	if doc, err = d.doc(table, entity); err != nil {
 		return
 	}
-	if m, err = depot.EntityMap(entity); err != nil {
+	if m, err = depot.EntityMap(entity, true); err != nil {
 		return
 	}
 	if _, err = doc.Create(ctx, m); status.Code(err) == codes.AlreadyExists {
@@ -205,7 +205,7 @@ func (q *queryRunner) next(it *firestore.DocumentIterator, append bool) (err err
 	if res, err = it.Next(); err != nil {
 		return
 	}
-	if err = depot.EntityFromMap(res.Data(), ev.Interface()); err != nil {
+	if err = depot.EntityFromMap(res.Data(), ev.Interface(), true); err != nil {
 		return
 	}
 	q.offset++

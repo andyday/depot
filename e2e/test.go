@@ -17,6 +17,8 @@ var (
 		ID:          "widget",
 		Name:        "Widget",
 		Description: "Test Widget",
+		Refs:        []string{"ref1", "ref2"},
+		TTL:         time.Now().Add(time.Hour).Unix(),
 		CreatedAt:   time.Now().UTC(),
 		UpdatedAt:   time.Now().UTC(),
 	}
@@ -131,6 +133,8 @@ type Widget struct {
 	Description         string     `depot:"desc,omitempty"`
 	Count               int64      `depot:"count,omitempty"`
 	Total               int64      `depot:"total,omitempty"`
+	Refs                []string   `depot:"refs,omitempty"`
+	TTL                 int64      `depot:"ttl,ttl"`
 	ExpirationPartition int64      `depot:"expirationPartition,omitempty,index:expired:pk"`
 	Expiration          *time.Time `depot:"expiration,omitempty,index:expired:sk"`
 	CreatedAt           time.Time  `depot:"createdAt,index:created:sk"`
