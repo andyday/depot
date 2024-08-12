@@ -18,10 +18,21 @@ var (
 		Name:        "Widget",
 		Description: "Test Widget",
 		Refs:        []string{"ref1", "ref2"},
-		Status:      "Active",
-		TTL:         time.Now().Add(time.Hour).Unix(),
-		CreatedAt:   time.Now().UTC(),
-		UpdatedAt:   time.Now().UTC(),
+		Preferences: map[string]map[string]bool{
+			"a": {
+				"1": true,
+				"2": false,
+			},
+			"b": {
+				"1": false,
+				"2": true,
+			},
+		},
+		Status: "Active",
+
+		TTL:       time.Now().Add(time.Hour).Unix(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	testWidgets = []Widget{
@@ -129,20 +140,21 @@ var (
 type WidgetStatus string
 
 type Widget struct {
-	TenantID            string       `depot:"tenantId,pk,index:created:pk,index:named:pk,index:category:pk"`
-	ID                  string       `depot:"id,sk"`
-	Name                string       `depot:"name,index:named:sk"`
-	Category            string       `depot:"category,omitempty,index:category:sk"`
-	Description         string       `depot:"desc,omitempty"`
-	Count               int64        `depot:"count,omitempty"`
-	Total               int64        `depot:"total,omitempty"`
-	Refs                []string     `depot:"refs,omitempty"`
-	TTL                 int64        `depot:"ttl,ttl"`
-	Status              WidgetStatus `depot:"status"`
-	ExpirationPartition int64        `depot:"expirationPartition,omitempty,index:expired:pk"`
-	Expiration          *time.Time   `depot:"expiration,omitempty,index:expired:sk"`
-	CreatedAt           time.Time    `depot:"createdAt,index:created:sk"`
-	UpdatedAt           time.Time    `depot:"updatedAt"`
+	TenantID            string                     `depot:"tenantId,pk,index:created:pk,index:named:pk,index:category:pk"`
+	ID                  string                     `depot:"id,sk"`
+	Name                string                     `depot:"name,index:named:sk"`
+	Category            string                     `depot:"category,omitempty,index:category:sk"`
+	Description         string                     `depot:"desc,omitempty"`
+	Count               int64                      `depot:"count,omitempty"`
+	Total               int64                      `depot:"total,omitempty"`
+	Refs                []string                   `depot:"refs,omitempty"`
+	Preferences         map[string]map[string]bool `depot:"preferences,omitempty"`
+	TTL                 int64                      `depot:"ttl,ttl"`
+	Status              WidgetStatus               `depot:"status"`
+	ExpirationPartition int64                      `depot:"expirationPartition,omitempty,index:expired:pk"`
+	Expiration          *time.Time                 `depot:"expiration,omitempty,index:expired:sk"`
+	CreatedAt           time.Time                  `depot:"createdAt,index:created:sk"`
+	UpdatedAt           time.Time                  `depot:"updatedAt"`
 }
 
 type Message struct {

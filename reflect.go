@@ -114,6 +114,7 @@ func EntityFromMap(m map[string]interface{}, entity interface{}, convertTTL bool
 		fld := ev.Field(i)
 		if v, ok := m[f.Name]; ok {
 			v = RealSlice(v)
+			v = RealMap(v)
 			if f.TTL && convertTTL {
 				v = (v.(time.Time)).Unix()
 			}
@@ -153,6 +154,64 @@ func RealSlice(v interface{}) interface{} {
 func ConvertSlice[T any](in []interface{}) (out []T) {
 	for _, e := range in {
 		out = append(out, e.(T))
+	}
+	return
+}
+
+func RealMap(v interface{}) interface{} {
+	if m, ok := v.(map[string]interface{}); ok {
+		return ConvertMap(m)
+	}
+	return v
+}
+
+func ConvertMap(m map[string]interface{}) interface{} {
+	for _, v := range m {
+		switch vt := v.(type) {
+		case string:
+			return convertMap[string](m)
+		case int:
+			return convertMap[int](m)
+		case int64:
+			return convertMap[int64](m)
+		case bool:
+			return convertMap[bool](m)
+		case map[string]interface{}:
+			for _, v2 := range vt {
+				switch v2.(type) {
+				case string:
+					return convertMapMap[string](m)
+				case int:
+					return convertMapMap[int](m)
+				case int64:
+					return convertMapMap[int64](m)
+				case bool:
+					return convertMapMap[bool](m)
+				}
+			}
+		}
+	}
+	panic(fmt.Sprintf("Could not convert map %+v", m))
+}
+
+func convertMapMap[T any](in map[string]interface{}) (out map[string]map[string]T) {
+	out = make(map[string]map[string]T)
+	for k, v := range in {
+		m2 := v.(map[string]interface{})
+		for kk, vv := range m2 {
+			if out[k] == nil {
+				out[k] = make(map[string]T)
+			}
+			out[k][kk] = vv.(T)
+		}
+	}
+	return
+}
+
+func convertMap[T any](in map[string]interface{}) (out map[string]T) {
+	out = make(map[string]T)
+	for k, v := range in {
+		out[k] = v.(T)
 	}
 	return
 }
