@@ -345,10 +345,10 @@ func conditionExpression(updates []depot.Update) (condition *string) {
 			exp = fmt.Sprintf("#%s >= :%s", u.Name, u.Name)
 		case *depot.ExistsCondition:
 			exp = fmt.Sprintf("attribute_exists(#%s)", u.Name)
-		default:
-			exp = fmt.Sprintf("#%s = :%s", u.Name, u.Name)
 		}
-		parts = append(parts, exp)
+		if exp != "" {
+			parts = append(parts, exp)
+		}
 	}
 	if len(parts) > 0 {
 		condition = aws.String(strings.Join(parts, "AND"))

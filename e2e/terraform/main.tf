@@ -1,7 +1,7 @@
-# module "dynamo" {
-#   source = "./dynamo"
-#   env    = var.env
-# }
+module "dynamo" {
+  source = "./dynamo"
+  env    = var.env
+}
 
 # module "datastore" {
 #   source  = "./datastore"
