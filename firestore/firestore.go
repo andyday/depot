@@ -142,7 +142,7 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 
 func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, entities interface{}, op ...depot.QueryOp) (page string, err error) {
 	var (
-		conditions []depot.Condition
+		conditions []depot.EntityCondition
 		sortField  string
 		offset     int
 		q          firestore.Query
@@ -228,23 +228,23 @@ func (q *queryRunner) next(it *firestore.DocumentIterator, append bool) (err err
 	return
 }
 
-func applyQueryConditions(in *firestore.CollectionRef, conditions []depot.Condition) (q firestore.Query) {
+func applyQueryConditions(in *firestore.CollectionRef, conditions []depot.EntityCondition) (q firestore.Query) {
 	q = in.Query
 	for _, c := range conditions {
 		switch c.Op.(type) {
-		case *depot.EqualQueryCondition:
+		case *depot.EqualCondition:
 			q = q.Where(c.Name, "=", c.Value)
-		case *depot.NotEqualQueryCondition:
+		case *depot.NotEqualCondition:
 			q = q.Where(c.Name, "!=", c.Value)
-		case *depot.LTQueryCondition:
+		case *depot.LTCondition:
 			q = q.Where(c.Name, "<", c.Value)
-		case *depot.LTEQueryCondition:
+		case *depot.LTECondition:
 			q = q.Where(c.Name, "<=", c.Value)
-		case *depot.GTQueryCondition:
+		case *depot.GTCondition:
 			q = q.Where(c.Name, ">", c.Value)
-		case *depot.GTEQueryCondition:
+		case *depot.GTECondition:
 			q = q.Where(c.Name, ">=", c.Value)
-		case *depot.ExistsQueryCondition:
+		case *depot.ExistsCondition:
 			q = q.Where(c.Name, "!=", "-DEAD-BEEF-")
 		default:
 			q = q.Where(c.Name, "==", c.Value)

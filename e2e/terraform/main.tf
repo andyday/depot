@@ -14,5 +14,5 @@ module "firestore" {
   source = "./firestore"
   env = var.env
   project = var.project
-  database = "(default)"
+  database = "depot-e2e"
 }

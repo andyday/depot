@@ -19,7 +19,7 @@ func TestFirestoreSuite(t *testing.T) {
 
 func (s *FirestoreSuite) SetupSuite() {
 	var err error
-	s.db, err = firestore.NewDatabase(context.Background(), os.Getenv("FIRESTORE_PROJECT_ID"), "")
+	s.db, err = firestore.NewDatabase(context.Background(), os.Getenv("FIRESTORE_PROJECT_ID"), "depot-e2e")
 	s.NoError(err)
 }
 

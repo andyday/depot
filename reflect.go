@@ -114,7 +114,9 @@ func EntityFromMap(m map[string]interface{}, entity interface{}, convertTTL bool
 		fld := ev.Field(i)
 		if v, ok := m[f.Name]; ok {
 			v = RealSlice(v)
-			v = RealMap(v)
+			if fld.Kind() == reflect.Map && fld.Type().Elem().Kind() != reflect.Interface {
+				v = RealMap(v)
+			}
 			if f.TTL && convertTTL {
 				v = (v.(time.Time)).Unix()
 			}
@@ -294,14 +296,14 @@ const (
 	KeyTypeSort
 )
 
-type Condition struct {
+type EntityCondition struct {
 	Name    string
 	Value   interface{}
 	KeyType KeyType
-	Op      QueryCondition
+	Op      Condition
 }
 
-func EntityConditions(kind string, entity interface{}, ops []QueryOp) (sortField string, conditions []Condition, err error) {
+func EntityConditions(kind string, entity interface{}, ops []QueryOp) (sortField string, conditions []EntityCondition, err error) {
 	var (
 		s  Struct
 		v  = reflect.ValueOf(entity)
@@ -314,7 +316,7 @@ func EntityConditions(kind string, entity interface{}, ops []QueryOp) (sortField
 	for i := 0; i < ln; i++ {
 		f := s[i]
 		fv := v.Field(i)
-		op := GetQueryCondition(ops, f.Name)
+		op := GetCondition(ops, f.Name)
 		value := fv.Interface()
 
 		mode := GetMode(kind, f)
@@ -335,11 +337,11 @@ func EntityConditions(kind string, entity interface{}, ops []QueryOp) (sortField
 				continue
 			}
 		}
-		conditions = append(conditions, Condition{
+		conditions = append(conditions, EntityCondition{
 			Name:    f.Name,
 			Value:   value,
 			KeyType: kt,
-			Op:      GetQueryCondition(ops, f.Name),
+			Op:      GetCondition(ops, f.Name),
 		})
 	}
 	return
@@ -377,9 +379,9 @@ func GetUpdateOp(ops []UpdateOp, field string) UpdateOp {
 	return nil
 }
 
-func GetQueryCondition(ops []QueryOp, field string) QueryCondition {
+func GetCondition(ops []QueryOp, field string) Condition {
 	for _, op := range ops {
-		if qc, ok := op.(QueryCondition); ok && qc.Field() == field {
+		if qc, ok := op.(Condition); ok && qc.Field() == field {
 			return qc
 		}
 	}

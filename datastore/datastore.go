@@ -111,7 +111,7 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 
 func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, entities interface{}, op ...depot.QueryOp) (page string, err error) {
 	var (
-		conditions []depot.Condition
+		conditions []depot.EntityCondition
 		sortField  string
 		offset     int
 		q          = datastore.NewQuery(table)
@@ -202,23 +202,23 @@ func (q *queryRunner) next(it *datastore.Iterator, append bool) (err error) {
 // 	reflect.Append(v, ev.Elem())
 // }
 
-func applyQueryConditions(in *datastore.Query, conditions []depot.Condition) (q *datastore.Query) {
+func applyQueryConditions(in *datastore.Query, conditions []depot.EntityCondition) (q *datastore.Query) {
 	q = in
 	for _, c := range conditions {
 		switch c.Op.(type) {
-		case *depot.EqualQueryCondition:
+		case *depot.EqualCondition:
 			q = q.FilterField(c.Name, "=", c.Value)
-		case *depot.NotEqualQueryCondition:
+		case *depot.NotEqualCondition:
 			q = q.FilterField(c.Name, "!=", c.Value)
-		case *depot.LTQueryCondition:
+		case *depot.LTCondition:
 			q = q.FilterField(c.Name, "<", c.Value)
-		case *depot.LTEQueryCondition:
+		case *depot.LTECondition:
 			q = q.FilterField(c.Name, "<=", c.Value)
-		case *depot.GTQueryCondition:
+		case *depot.GTCondition:
 			q = q.FilterField(c.Name, ">", c.Value)
-		case *depot.GTEQueryCondition:
+		case *depot.GTECondition:
 			q = q.FilterField(c.Name, ">=", c.Value)
-		case *depot.ExistsQueryCondition:
+		case *depot.ExistsCondition:
 			q = q.FilterField(c.Name, "!=", "-DEAD-BEEF-")
 		default:
 			q = q.FilterField(c.Name, "=", c.Value)

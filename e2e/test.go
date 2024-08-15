@@ -28,6 +28,10 @@ var (
 				"2": true,
 			},
 		},
+		Data: map[string]interface{}{
+			"c": "d",
+			"e": "f",
+		},
 		Status: "Active",
 
 		TTL:       time.Now().Add(time.Hour).Unix(),
@@ -149,6 +153,7 @@ type Widget struct {
 	Total               int64                      `depot:"total,omitempty"`
 	Refs                []string                   `depot:"refs,omitempty"`
 	Preferences         map[string]map[string]bool `depot:"preferences,omitempty"`
+	Data                map[string]interface{}     `depot:"data,omitempty"`
 	TTL                 int64                      `depot:"ttl,ttl"`
 	Status              WidgetStatus               `depot:"status"`
 	ExpirationPartition int64                      `depot:"expirationPartition,omitempty,index:expired:pk"`

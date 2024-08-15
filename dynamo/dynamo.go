@@ -136,6 +136,7 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 	}
 
 	set, add := updateExpressionParts(updates)
+	conditions := conditionExpression(updates)
 	if len(set) > 0 {
 		exp.WriteString("SET ")
 		exp.WriteString(strings.Join(set, ", "))
@@ -151,6 +152,7 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 	_, err = d.dynamo.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName:                 aws.String(table),
 		Key:                       key,
+		ConditionExpression:       conditions,
 		ExpressionAttributeNames:  names,
 		ExpressionAttributeValues: values,
 		UpdateExpression:          aws.String(strings.TrimSpace(exp.String())),
@@ -164,9 +166,10 @@ func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, 
 		idx        *string
 		names      = make(map[string]string)
 		values     = make(map[string]types.AttributeValue)
-		conditions []depot.Condition
+		conditions []depot.EntityCondition
 		cv         types.AttributeValue
 		res        *dynamodb.QueryOutput
+		scanRes    *dynamodb.ScanOutput
 		keyExp     *string
 		filterExp  *string
 		limit      *int32
@@ -194,6 +197,24 @@ func (d *DB) Query(ctx context.Context, table, kind string, entity interface{}, 
 	keyExp, filterExp = queryExpressionParts(conditions)
 	if limit, page, asc, err = queryDirectives(op); err != nil {
 		return
+	}
+
+	if keyExp == nil {
+		if scanRes, err = d.dynamo.Scan(ctx, &dynamodb.ScanInput{
+			TableName:                 aws.String(table),
+			IndexName:                 idx,
+			ExpressionAttributeNames:  names,
+			ExpressionAttributeValues: values,
+			FilterExpression:          filterExp,
+			Limit:                     limit,
+			ExclusiveStartKey:         page,
+		}); err != nil {
+			return
+		}
+		if err = unmarshalEntities(scanRes.Items, entities); err != nil {
+			return
+		}
+		return EncodePage(scanRes.LastEvaluatedKey)
 	}
 
 	if res, err = d.dynamo.Query(ctx, &dynamodb.QueryInput{
@@ -264,7 +285,7 @@ func updateExpressionParts(updates []depot.Update) (set, add []string) {
 	return
 }
 
-func queryExpressionParts(conditions []depot.Condition) (keyExp, filterExp *string) {
+func queryExpressionParts(conditions []depot.EntityCondition) (keyExp, filterExp *string) {
 	var (
 		keyParts    []string
 		filterParts []string
@@ -272,26 +293,20 @@ func queryExpressionParts(conditions []depot.Condition) (keyExp, filterExp *stri
 	for _, c := range conditions {
 		var exp string
 		switch c.Op.(type) {
-		case *depot.EqualQueryCondition:
+		case *depot.EqualCondition:
 			exp = fmt.Sprintf("#%s = :%s", c.Name, c.Name)
-		case *depot.NotEqualQueryCondition:
+		case *depot.NotEqualCondition:
 			exp = fmt.Sprintf("#%s <> :%s", c.Name, c.Name)
-		case *depot.LTQueryCondition:
+		case *depot.LTCondition:
 			exp = fmt.Sprintf("#%s < :%s", c.Name, c.Name)
-		case *depot.LTEQueryCondition:
+		case *depot.LTECondition:
 			exp = fmt.Sprintf("#%s <= :%s", c.Name, c.Name)
-		case *depot.GTQueryCondition:
+		case *depot.GTCondition:
 			exp = fmt.Sprintf("#%s > :%s", c.Name, c.Name)
-		case *depot.GTEQueryCondition:
+		case *depot.GTECondition:
 			exp = fmt.Sprintf("#%s >= :%s", c.Name, c.Name)
-		case *depot.ExistsQueryCondition:
+		case *depot.ExistsCondition:
 			exp = fmt.Sprintf("attribute_exists(#%s)", c.Name)
-		// case *depot.NotExistsQueryCondition:
-		// 	exp = fmt.Sprintf("attribute_not_exists(#%s)", c.Name)
-		// case *depot.PrefixQueryCondition:
-		// 	exp = fmt.Sprintf("begins_with(#%s, :%s)", c.Name, c.Name)
-		// case *depot.ContainsQueryCondition:
-		// 	exp = fmt.Sprintf("contains(#%s, :%s)", c.Name, c.Name)
 		default:
 			exp = fmt.Sprintf("#%s = :%s", c.Name, c.Name)
 		}
@@ -307,6 +322,36 @@ func queryExpressionParts(conditions []depot.Condition) (keyExp, filterExp *stri
 	}
 	if len(filterParts) > 0 {
 		filterExp = aws.String(strings.Join(filterParts, " AND "))
+	}
+	return
+}
+
+func conditionExpression(updates []depot.Update) (condition *string) {
+	var parts []string
+	for _, u := range updates {
+		var exp string
+		switch u.Op.(type) {
+		case *depot.EqualCondition:
+			exp = fmt.Sprintf("#%s = :%s", u.Name, u.Name)
+		case *depot.NotEqualCondition:
+			exp = fmt.Sprintf("#%s <> :%s", u.Name, u.Name)
+		case *depot.LTCondition:
+			exp = fmt.Sprintf("#%s < :%s", u.Name, u.Name)
+		case *depot.LTECondition:
+			exp = fmt.Sprintf("#%s <= :%s", u.Name, u.Name)
+		case *depot.GTCondition:
+			exp = fmt.Sprintf("#%s > :%s", u.Name, u.Name)
+		case *depot.GTECondition:
+			exp = fmt.Sprintf("#%s >= :%s", u.Name, u.Name)
+		case *depot.ExistsCondition:
+			exp = fmt.Sprintf("attribute_exists(#%s)", u.Name)
+		default:
+			exp = fmt.Sprintf("#%s = :%s", u.Name, u.Name)
+		}
+		parts = append(parts, exp)
+	}
+	if len(parts) > 0 {
+		condition = aws.String(strings.Join(parts, "AND"))
 	}
 	return
 }
@@ -398,7 +443,7 @@ func updateValue(u depot.Update) (av types.AttributeValue, err error) {
 	return
 }
 
-func conditionValue(c depot.Condition) (av types.AttributeValue, err error) {
+func conditionValue(c depot.EntityCondition) (av types.AttributeValue, err error) {
 	// var v interface{}
 	// switch c.Op.Type {
 	// case depot.TypeSubtract:
