@@ -13,7 +13,7 @@ provider "aws" {
 }
 
 resource "aws_dynamodb_table" "widget" {
-  name         = "depot-${var.env}-widget"
+  name         = "depot-widget"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "tenantId"
   range_key    = "id"
@@ -74,7 +74,7 @@ resource "aws_dynamodb_table" "widget" {
 }
 
 resource "aws_dynamodb_table" "message" {
-  name         = "depot-${var.env}-message"
+  name         = "depot-message"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "tenantId"
   range_key    = "id"

@@ -1,13 +1,17 @@
 package depot
 
 import (
-	"encoding/base64"
 	"fmt"
-	"math"
-	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+)
+
+var (
+	values      = []any{123, int8(123), int16(123), int32(123), int64(123), uint(123), uint8(123), uint16(123), uint32(123), uint64(123), float32(123), float64(123), "123"}
+	greaterThan = []any{124, int8(124), int16(124), int32(124), int64(124), uint(124), uint8(124), uint16(124), uint32(124), uint64(124), float32(124), float64(124), "124"}
+	lessThan    = []any{122, int8(122), int16(122), int32(122), int64(122), uint(122), uint8(122), uint16(122), uint32(122), uint64(122), float32(122), float64(122), "122"}
 )
 
 func TestAddValues(t *testing.T) {
@@ -93,22 +97,123 @@ func TestNegateValue(t *testing.T) {
 	assert.Equal(t, int64(-5), NegateValue(int64(5)))
 }
 
-func TestMaxInt64(t *testing.T) {
-	// 9223372036854775807
-
-	digits := 0
-	for i := math.MaxInt64; i > 0; digits++ {
-		fmt.Printf("%019d\n", i)
-		i = i / 10
+func TestValuesEqual(t *testing.T) {
+	var notEqual []any
+	copy(notEqual, greaterThan)
+	notEqual = append(notEqual, nil)
+	for _, a := range values {
+		for _, b := range values {
+			assert.True(t, ValuesEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
 	}
-	assert.Equal(t, 19, digits)
 
-	digits = 0
-	for i := math.MaxInt64; i > 0; digits++ {
-		i = i / 16
+	for _, a := range values {
+		for _, b := range notEqual {
+			assert.False(t, ValuesEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+			assert.False(t, ValuesEqual(b, a), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(b), b, reflect.TypeOf(a), a))
+		}
 	}
-	assert.Equal(t, 16, digits)
+}
 
-	bi := big.NewInt(math.MaxInt64)
-	assert.Equal(t, "foo", base64.RawURLEncoding.EncodeToString(bi.Bytes()))
+func TestValuesNotEqual(t *testing.T) {
+	var notEqual []any
+	copy(notEqual, greaterThan)
+	notEqual = append(notEqual, nil)
+	for _, a := range values {
+		for _, b := range values {
+			assert.False(t, ValuesNotEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+	for _, a := range values {
+		for _, b := range notEqual {
+			assert.True(t, ValuesNotEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+			assert.True(t, ValuesNotEqual(b, a), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(b), b, reflect.TypeOf(a), a))
+		}
+	}
+}
+
+func TestValuesGreaterThan(t *testing.T) {
+	var notGreaterThan []any
+	copy(notGreaterThan, values)
+	notGreaterThan = append(notGreaterThan, nil)
+	for _, a := range values {
+		for _, b := range lessThan {
+			assert.True(t, ValuesGreaterThan(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+
+	for _, a := range values {
+		for _, b := range notGreaterThan {
+			assert.False(t, ValuesGreaterThan(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+			assert.False(t, ValuesGreaterThan(b, a), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(b), b, reflect.TypeOf(a), a))
+		}
+	}
+}
+
+func TestValuesGreaterThanOrEqual(t *testing.T) {
+	var valuesPlus, lessThanPlus []any
+	copy(valuesPlus, values)
+	copy(lessThanPlus, lessThan)
+	valuesPlus = append(valuesPlus, nil)
+	lessThanPlus = append(lessThanPlus, nil)
+	for _, a := range values {
+		for _, b := range lessThan {
+			assert.True(t, ValuesGreaterThanOrEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+
+	for _, a := range values {
+		for _, b := range values {
+			assert.True(t, ValuesGreaterThanOrEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+
+	for _, a := range lessThanPlus {
+		for _, b := range valuesPlus {
+			assert.False(t, ValuesGreaterThanOrEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+}
+
+func TestValuesLessThan(t *testing.T) {
+	var notLessThan []any
+	copy(notLessThan, values)
+	notLessThan = append(notLessThan, nil)
+	for _, a := range values {
+		for _, b := range greaterThan {
+			assert.True(t, ValuesLessThan(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+
+	for _, a := range values {
+		for _, b := range notLessThan {
+			assert.False(t, ValuesLessThan(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+			assert.False(t, ValuesLessThan(b, a), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(b), b, reflect.TypeOf(a), a))
+		}
+	}
+}
+
+func TestValuesLessThanOrEqual(t *testing.T) {
+	var valuesPlus, greaterThanPlus []any
+	copy(valuesPlus, values)
+	copy(greaterThanPlus, lessThan)
+	valuesPlus = append(valuesPlus, nil)
+	greaterThanPlus = append(greaterThanPlus, nil)
+	for _, a := range values {
+		for _, b := range greaterThan {
+			assert.True(t, ValuesLessThanOrEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+
+	for _, a := range values {
+		for _, b := range values {
+			assert.True(t, ValuesLessThanOrEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
+
+	for _, a := range greaterThanPlus {
+		for _, b := range valuesPlus {
+			assert.False(t, ValuesLessThanOrEqual(a, b), fmt.Sprintf("%v(%v) vs %v(%v)", reflect.TypeOf(a), a, reflect.TypeOf(b), b))
+		}
+	}
 }
