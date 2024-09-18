@@ -1,0 +1,10 @@
+dir: "{{.InterfaceDirRelative}}/mocks"
+mockname: "{{.InterfaceName}}"
+outpkg: "mocks"
+filename: "{{.InterfaceName}}.go"
+all: True
+packages:
+  github.com/andyday/depot:
+  github.com/andyday/depot/datastore:
+  github.com/andyday/depot/dynamo:
+  github.com/andyday/depot/firestore:

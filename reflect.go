@@ -100,7 +100,7 @@ func EntityMap(entity interface{}, convertTTL bool) (m map[string]interface{}, e
 	return
 }
 
-func EntityFromMap(m map[string]interface{}, entity interface{}, convertTTL bool) (err error) {
+func EntityFromMap(m map[string]any, entity any, convertTTL bool) (err error) {
 	var (
 		s  Struct
 		ev = reflect.ValueOf(entity)
@@ -134,123 +134,20 @@ func EntityFromMap(m map[string]interface{}, entity interface{}, convertTTL bool
 	return
 }
 
-func RealSlice(v interface{}) interface{} {
-	if s, ok := v.([]interface{}); !ok {
-		return v
-	} else if len(s) <= 0 {
-		return v
-	} else {
-		switch s[0].(type) {
-		case string:
-			return ConvertSlice[string](s)
-		case int:
-			return ConvertSlice[int](s)
-		case int64:
-			return ConvertSlice[int64](s)
-		default:
-			return v
-		}
-	}
-}
-
-func ConvertSlice[T any](in []interface{}) (out []T) {
-	for _, e := range in {
-		out = append(out, e.(T))
-	}
-	return
-}
-
-func RealMap(v interface{}) interface{} {
-	if m, ok := v.(map[string]interface{}); ok {
-		return ConvertMap(m)
-	}
-	return v
-}
-
-func ConvertMap(m map[string]interface{}) interface{} {
-	for _, v := range m {
-		switch vt := v.(type) {
-		case string:
-			return convertMap[string](m)
-		case int:
-			return convertMap[int](m)
-		case int64:
-			return convertMap[int64](m)
-		case bool:
-			return convertMap[bool](m)
-		case map[string]interface{}:
-			for _, v2 := range vt {
-				switch v2.(type) {
-				case string:
-					return convertMapMap[string](m)
-				case int:
-					return convertMapMap[int](m)
-				case int64:
-					return convertMapMap[int64](m)
-				case bool:
-					return convertMapMap[bool](m)
-				}
-			}
-		}
-	}
-	panic(fmt.Sprintf("Could not convert map %+v", m))
-}
-
-func convertMapMap[T any](in map[string]interface{}) (out map[string]map[string]T) {
-	out = make(map[string]map[string]T)
-	for k, v := range in {
-		m2 := v.(map[string]interface{})
-		for kk, vv := range m2 {
-			if out[k] == nil {
-				out[k] = make(map[string]T)
-			}
-			out[k][kk] = vv.(T)
-		}
-	}
-	return
-}
-
-func convertMap[T any](in map[string]interface{}) (out map[string]T) {
-	out = make(map[string]T)
-	for k, v := range in {
-		out[k] = v.(T)
-	}
-	return
-}
-
 func EntityFromProperties(props []Property, entity interface{}) (err error) {
-	propMap := make(map[string]Property)
-	for _, prop := range props {
-		propMap[prop.Name] = prop
+	m := make(map[string]any)
+	for _, p := range props {
+		m[p.Name] = p.Value
 	}
-	return EntityFromPropertyMap(propMap, entity)
+	return EntityFromMap(m, entity, false)
 }
 
 func EntityFromPropertyMap(props map[string]Property, entity interface{}) (err error) {
-	var (
-		s Struct
-		v = reflect.ValueOf(entity)
-	)
-	if s, v, err = GetStruct(v); err != nil {
-		return
+	m := make(map[string]any)
+	for k, v := range props {
+		m[k] = v.Value
 	}
-	ln := len(s)
-	for i := 0; i < ln; i++ {
-		f := s[i]
-		fld := v.Field(i)
-		if p, ok := props[f.Name]; ok {
-			pv := reflect.ValueOf(p.Value)
-			if fld.Kind() == reflect.Ptr && pv.Kind() != reflect.Ptr {
-				if fld.IsNil() {
-					fld.Set(reflect.New(fld.Type().Elem()))
-				}
-				fld.Elem().Set(pv)
-			} else {
-				fld.Set(pv)
-			}
-		}
-	}
-	return
+	return EntityFromMap(m, entity, false)
 }
 
 type Update struct {
@@ -343,6 +240,90 @@ func EntityConditions(kind string, entity interface{}, ops []QueryOp) (sortField
 			KeyType: kt,
 			Op:      GetCondition(ops, f.Name),
 		})
+	}
+	return
+}
+
+func RealSlice(v interface{}) interface{} {
+	if s, ok := v.([]interface{}); !ok {
+		return v
+	} else if len(s) <= 0 {
+		return v
+	} else {
+		switch s[0].(type) {
+		case string:
+			return ConvertSlice[string](s)
+		case int:
+			return ConvertSlice[int](s)
+		case int64:
+			return ConvertSlice[int64](s)
+		default:
+			return v
+		}
+	}
+}
+
+func ConvertSlice[T any](in []interface{}) (out []T) {
+	for _, e := range in {
+		out = append(out, e.(T))
+	}
+	return
+}
+
+func RealMap(v interface{}) interface{} {
+	if m, ok := v.(map[string]interface{}); ok {
+		return ConvertMap(m)
+	}
+	return v
+}
+
+func ConvertMap(m map[string]interface{}) interface{} {
+	for _, v := range m {
+		switch vt := v.(type) {
+		case string:
+			return convertMap[string](m)
+		case int:
+			return convertMap[int](m)
+		case int64:
+			return convertMap[int64](m)
+		case bool:
+			return convertMap[bool](m)
+		case map[string]interface{}:
+			for _, v2 := range vt {
+				switch v2.(type) {
+				case string:
+					return convertMapMap[string](m)
+				case int:
+					return convertMapMap[int](m)
+				case int64:
+					return convertMapMap[int64](m)
+				case bool:
+					return convertMapMap[bool](m)
+				}
+			}
+		}
+	}
+	panic(fmt.Sprintf("Could not convert map %+v", m))
+}
+
+func convertMapMap[T any](in map[string]interface{}) (out map[string]map[string]T) {
+	out = make(map[string]map[string]T)
+	for k, v := range in {
+		m2 := v.(map[string]interface{})
+		for kk, vv := range m2 {
+			if out[k] == nil {
+				out[k] = make(map[string]T)
+			}
+			out[k][kk] = vv.(T)
+		}
+	}
+	return
+}
+
+func convertMap[T any](in map[string]interface{}) (out map[string]T) {
+	out = make(map[string]T)
+	for k, v := range in {
+		out[k] = v.(T)
 	}
 	return
 }

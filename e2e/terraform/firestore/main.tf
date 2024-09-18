@@ -4,8 +4,8 @@ provider "google" {
 }
 
 locals {
-  widget   = "depot-${var.env}-widget"
-  message  = "depot-${var.env}-message"
+  widget   = "depot-widget"
+  message  = "depot-message"
   database = var.database
 }
 

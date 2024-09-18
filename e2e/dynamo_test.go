@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/andyday/depot/dynamo"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/stretchr/testify/suite"
 )
@@ -19,12 +18,13 @@ func TestDynamoSuite(t *testing.T) {
 }
 
 func (s *DynamoSuite) SetupSuite() {
-	cfg, err := awsconfig.LoadDefaultConfig(context.Background(), awsconfig.WithClientLogMode(
-		aws.LogRequestWithBody|
-			aws.LogResponseWithBody|
-			aws.LogRequestEventMessage|
-			aws.LogResponseEventMessage,
-	))
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background())
+	//awsconfig.WithClientLogMode(
+	//	aws.LogRequestWithBody|
+	//		aws.LogResponseWithBody|
+	//		aws.LogRequestEventMessage|
+	//		aws.LogResponseEventMessage,
+	//))
 	s.NoError(err)
 	s.db, err = dynamo.NewDatabase(cfg)
 	s.NoError(err)

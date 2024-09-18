@@ -95,6 +95,7 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 		u            depot.Update
 		existing     map[string]interface{}
 		updates      []firestore.Update
+		canUpdate    = true
 		v            interface{}
 	)
 	if doc, err = d.doc(table, entity); err != nil {
@@ -114,6 +115,13 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 		} else {
 			existing = res.Data()
 		}
+
+		for _, u := range depotUpdates {
+			switch u.Op.(type) {
+			}
+
+		}
+
 		for _, u = range depotUpdates {
 			v = existing[u.Name]
 			switch u.Op.(type) {
@@ -121,6 +129,20 @@ func (d *DB) Update(ctx context.Context, table string, entity interface{}, op ..
 				v = depot.AddValues(v, u.Value)
 			case *depot.SubtractUpdateOp:
 				v = depot.SubtractValues(v, u.Value)
+			case *depot.EqualCondition:
+				canUpdate = canUpdate && depot.ValuesEqual(v, u.Value)
+			case *depot.NotEqualCondition:
+				canUpdate = canUpdate && depot.ValuesNotEqual(v, u.Value)
+			case *depot.LTCondition:
+				canUpdate = canUpdate && depot.ValuesLessThan(v, u.Value)
+			case *depot.LTECondition:
+				canUpdate = canUpdate && depot.ValuesLessThanOrEqual(v, u.Value)
+			case *depot.GTCondition:
+				canUpdate = canUpdate && depot.ValuesGreaterThan(v, u.Value)
+			case *depot.GTECondition:
+				canUpdate = canUpdate && depot.ValuesGreaterThanOrEqual(v, u.Value)
+			//case *depot.ExistsCondition:
+
 			default:
 				v = u.Value
 			}

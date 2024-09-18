@@ -16,5 +16,6 @@ func TestEncodePage(t *testing.T) {
 	assert.NoError(t, err)
 
 	decoded, err := DecodePage(encoded)
+	assert.NoError(t, err)
 	assert.Equal(t, expected, decoded)
 }

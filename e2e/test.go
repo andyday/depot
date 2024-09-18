@@ -32,8 +32,8 @@ var (
 			"c": "d",
 			"e": "f",
 		},
-		Status: "Active",
-
+		Version:   123,
+		Status:    "Active",
 		TTL:       time.Now().Add(time.Hour).Unix(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
@@ -155,6 +155,7 @@ type Widget struct {
 	Preferences         map[string]map[string]bool `depot:"preferences,omitempty"`
 	Data                map[string]interface{}     `depot:"data,omitempty"`
 	TTL                 int64                      `depot:"ttl,ttl"`
+	Version             int64                      `depot:"version,omitempty"`
 	Status              WidgetStatus               `depot:"status"`
 	ExpirationPartition int64                      `depot:"expirationPartition,omitempty,index:expired:pk"`
 	Expiration          *time.Time                 `depot:"expiration,omitempty,index:expired:sk"`
@@ -178,12 +179,12 @@ type Suite struct {
 
 func (s *Suite) SetupTest() {
 	s.ctx = context.Background()
-	s.widgets = depot.NewTable[Widget](s.db, "depot-dev-widget")
+	s.widgets = depot.NewTable[Widget](s.db, "depot-widget")
 	_, err := s.widgets.Delete(s.ctx, testWidgetKey)
 	s.NoError(err)
 	_, err = s.widgets.Get(s.ctx, testWidgetKey)
 	s.ErrorIs(err, depot.ErrEntityNotFound)
-	s.messages = depot.NewTable[Message](s.db, "depot-dev-message")
+	s.messages = depot.NewTable[Message](s.db, "depot-message")
 }
 
 func TestPut(s *Suite) {
@@ -194,14 +195,14 @@ func TestPut(s *Suite) {
 	widget, err = s.widgets.Get(s.ctx, testWidgetKey)
 	s.NoError(err)
 	log.Infof(s.ctx, "Widget: %+v", widget)
-	s.Equal(expected, widget)
+	s.equals(expected, widget)
 	expected.Name = "Widget (edited)"
 	_, err = s.widgets.Put(s.ctx, expected)
 	s.NoError(err)
 	widget, err = s.widgets.Get(s.ctx, testWidgetKey)
 	s.NoError(err)
 	log.Infof(s.ctx, "Widget: %+v", widget)
-	s.Equal(expected, widget)
+	s.equals(expected, widget)
 }
 
 func TestCreate(s *Suite) {
@@ -212,7 +213,8 @@ func TestCreate(s *Suite) {
 	widget, err = s.widgets.Get(s.ctx, testWidgetKey)
 	s.NoError(err)
 	log.Infof(s.ctx, "Widget: %+v", widget)
-	s.Equal(expected, widget)
+	s.equals(expected, widget)
+
 	_, err = s.widgets.Create(s.ctx, expected)
 	s.ErrorIs(err, depot.ErrEntityAlreadyExists)
 }
@@ -228,6 +230,7 @@ func TestUpdate(s *Suite) {
 		Description: "New Description",
 		Count:       5,
 		Total:       5,
+		Version:     123,
 		UpdatedAt:   time.Now().UTC(),
 	}, depot.Add("count"), depot.Subtract("total"))
 	s.NoError(err)
@@ -239,7 +242,7 @@ func TestUpdate(s *Suite) {
 	s.Equal("New Description", widget.Description)
 	s.Equal(int64(5), widget.Count)
 	s.Equal(int64(-5), widget.Total)
-	s.Equal(expected.CreatedAt, widget.CreatedAt)
+	s.WithinDuration(expected.CreatedAt, widget.CreatedAt, time.Millisecond)
 }
 
 func TestQueryCreatedIndex(s *Suite) {
@@ -256,10 +259,10 @@ func TestQueryCreatedIndex(s *Suite) {
 	s.NoError(err)
 	s.Empty(page)
 	s.Equal(4, len(widgets))
-	s.Equal(testWidgets[5], widgets[0])
-	s.Equal(testWidgets[4], widgets[1])
-	s.Equal(testWidgets[3], widgets[2])
-	s.Equal(testWidgets[2], widgets[3])
+	s.equals(testWidgets[5], widgets[0])
+	s.equals(testWidgets[4], widgets[1])
+	s.equals(testWidgets[3], widgets[2])
+	s.equals(testWidgets[2], widgets[3])
 }
 
 func TestQueryNamedIndex(s *Suite) {
@@ -277,8 +280,8 @@ func TestQueryNamedIndex(s *Suite) {
 	s.NoError(err)
 	s.NotEmpty(page)
 	s.Equal(2, len(widgets))
-	s.Equal(testWidgets[0], widgets[0])
-	s.Equal(testWidgets[1], widgets[1])
+	s.equals(testWidgets[0], widgets[0])
+	s.equals(testWidgets[1], widgets[1])
 
 	widgets, page, err = s.widgets.Query(s.ctx,
 		"named",
@@ -290,7 +293,7 @@ func TestQueryNamedIndex(s *Suite) {
 
 	s.NoError(err)
 	s.Equal(1, len(widgets))
-	s.Equal(testWidgets[3], widgets[0])
+	s.equals(testWidgets[3], widgets[0])
 
 	if page != "" {
 		widgets, page, err = s.widgets.Query(s.ctx,
@@ -345,4 +348,17 @@ func TestQueryMessage(s *Suite) {
 	s.Empty(page)
 	s.Equal(1, len(messages))
 	s.Equal(testMessages[0], messages[0])
+}
+
+func (s *Suite) equals(a, b Widget) {
+	s.WithinDuration(a.CreatedAt, b.CreatedAt, time.Millisecond)
+	s.WithinDuration(a.UpdatedAt, b.UpdatedAt, time.Millisecond)
+	if a.Expiration != nil {
+		s.WithinDuration(*a.Expiration, *b.Expiration, time.Millisecond)
+	}
+	a.CreatedAt = b.CreatedAt
+	a.UpdatedAt = b.UpdatedAt
+	a.Expiration = b.Expiration
+
+	s.Equal(a, b)
 }

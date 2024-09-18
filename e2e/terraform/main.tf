@@ -1,6 +1,13 @@
+terraform {
+  backend "s3" {
+    bucket = "depot-terraform"
+    key    = "state"
+    region = "us-west-2"
+  }
+}
+
 module "dynamo" {
   source = "./dynamo"
-  env    = var.env
 }
 
 # module "datastore" {
@@ -12,7 +19,6 @@ module "dynamo" {
 
 module "firestore" {
   source = "./firestore"
-  env = var.env
   project = var.project
   database = "depot-e2e"
 }
